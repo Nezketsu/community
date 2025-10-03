@@ -4,6 +4,8 @@ import (
     "std"
     "strings"
     "time"
+
+    "gno.land/p/nt/avl"
 )
 
 // =============================================================================
@@ -13,6 +15,7 @@ import (
 var trustScores map[std.Address]TrustScore        // Main storage for user trust scores
 var userVotes map[string]bool                     // Tracks votes in "voter_target" format
 var voteHistory map[std.Address][]VoteHistory     // Historical vote records per user
+var userComments map[std.Address]*avl.Tree        // User comments storage using AVL tree
 var owner std.Address                             // Contract owner address
 
 // Performance optimization cache
@@ -35,6 +38,7 @@ func init() {
     trustScores = make(map[std.Address]TrustScore)
     userVotes = make(map[string]bool)
     voteHistory = make(map[std.Address][]VoteHistory)
+    userComments = make(map[std.Address]*avl.Tree)
     owner = std.Address("g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5")
 
     sortedUsers = make([]std.Address, 0)
@@ -545,5 +549,75 @@ func RemoveUser(target std.Address) {
 func TransferOwnership(newOwner std.Address) {
     onlyOwner()
     owner = newOwner
+}
+
+// =============================================================================
+// COMMENT FUNCTIONS
+// =============================================================================
+
+// AddComment adds a comment to a user's profile
+func AddComment(_ realm, target std.Address, text string) {
+    caller := std.PreviousRealm().Address()
+
+    // Verify caller is registered
+    if _, exists := trustScores[caller]; !exists {
+        panic("commenter must be registered")
+    }
+
+    // Verify target exists
+    if _, exists := trustScores[target]; !exists {
+        panic("target user not registered")
+    }
+
+    // Validate comment text
+    if len(text) == 0 {
+        panic("comment text cannot be empty")
+    }
+    if len(text) > 500 {
+        panic("comment text too long (max 500 characters)")
+    }
+
+    // Initialize AVL tree for target if not exists
+    if userComments[target] == nil {
+        userComments[target] = avl.NewTree()
+    }
+
+    // Create comment
+    comment := Comment{
+        Author:    caller,
+        Text:      text,
+        Timestamp: time.Now().Unix(),
+    }
+
+    // Use timestamp + author as unique key
+    key := string(comment.Timestamp) + "_" + string(caller)
+    userComments[target].Set(key, comment)
+}
+
+// GetComments returns all comments for a user's profile
+func GetComments(target std.Address) []Comment {
+    tree := userComments[target]
+    if tree == nil {
+        return []Comment{}
+    }
+
+    comments := make([]Comment, 0)
+    tree.ReverseIterate("", "", func(key string, value interface{}) bool {
+        if comment, ok := value.(Comment); ok {
+            comments = append(comments, comment)
+        }
+        return false
+    })
+
+    return comments
+}
+
+// GetCommentCount returns the number of comments for a user
+func GetCommentCount(target std.Address) int {
+    tree := userComments[target]
+    if tree == nil {
+        return 0
+    }
+    return tree.Size()
 }
 

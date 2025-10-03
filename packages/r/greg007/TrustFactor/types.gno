@@ -34,3 +34,10 @@ type UserDisplay struct {
     trust          TrustScore  // User's trust score data
     compositeScore float64     // Calculated composite score
 }
+
+// Comment represents a user comment on a profile
+type Comment struct {
+    Author    std.Address // Address of the comment author
+    Text      string      // Comment text content
+    Timestamp int64       // Unix timestamp of the comment
+}

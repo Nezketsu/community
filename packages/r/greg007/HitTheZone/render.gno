@@ -20,6 +20,7 @@ func Render(path string) string {
 	minVal := query.Get("min")
 	maxVal := query.Get("max")
 	amount := query.Get("amount")
+	
 
 	var out strings.Builder
 
