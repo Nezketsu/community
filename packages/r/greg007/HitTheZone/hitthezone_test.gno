@@ -6,24 +6,24 @@ import (
 
 func TestCalculateMultiplier(t *testing.T) {
 	// Test full range (1-100)
-	result := CalculateMultiplier(1, 100)
+	result := calculateMultiplier(1, 100)
 	expected := 1.0
 	if result != expected {
-		t.Errorf("CalculateMultiplier(1, 100) = %f; want %f", result, expected)
+		t.Errorf("calculateMultiplier(1, 100) = %f; want %f", result, expected)
 	}
 
 	// Test single number (50-50)
-	result = CalculateMultiplier(50, 50)
+	result = calculateMultiplier(50, 50)
 	expected = 100.0
 	if result != expected {
-		t.Errorf("CalculateMultiplier(50, 50) = %f; want %f", result, expected)
+		t.Errorf("calculateMultiplier(50, 50) = %f; want %f", result, expected)
 	}
 
 	// Test invalid range (min >= max)
-	result = CalculateMultiplier(60, 50)
+	result = calculateMultiplier(60, 50)
 	expected = 0.0
 	if result != expected {
-		t.Errorf("CalculateMultiplier(60, 50) = %f; want %f", result, expected)
+		t.Errorf("calculateMultiplier(60, 50) = %f; want %f", result, expected)
 	}
 }
 
@@ -54,10 +54,10 @@ func TestPlayGame(t *testing.T) {
 	// We expect some wins but not necessarily all
 }
 
+// Test win scenario logic (without actual coin transfers)
+// In test environment, we can't test actual payouts due to banker restrictions
+// This test verifies the handlePayout returns expected result for win condition
 func TestHandlePayoutWin(t *testing.T) {
-	// Test win scenario logic (without actual coin transfers)
-	// In test environment, we can't test actual payouts due to banker restrictions
-	// This test verifies the handlePayout returns expected result for win condition
 	testAddr := address("g1test")
 	betAmount := int64(1000)
 	multiplier := 2.0

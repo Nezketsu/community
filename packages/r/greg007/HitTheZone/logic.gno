@@ -1,3 +1,23 @@
+// Package hitthezone implements a provably fair gambling game on the Gno blockchain.
+//
+// Hit The Zone is a number guessing game where players bet on a range (min-max) within 1-100.
+// A random number is generated on-chain, and if it falls within the player's chosen range,
+// they win their bet multiplied by a calculated multiplier based on the range size.
+//
+// Game mechanics:
+//   - Players choose a range (min-max) between 1 and 100
+//   - Smaller ranges = higher multipliers (up to x100 for single number)
+//   - Random number generated using entropy-based seeding
+//   - Instant payout if player wins and realm has sufficient balance
+//   - Automatic refund if payout fails
+//
+// Public functions:
+//   - Game(min, max): Play the game with specified range
+//   - Donate(): Support the game by donating to the owner
+//   - GetRealmBalance(): View available funds for payouts
+//   - GetTotalDonations(): View total donations received
+//   - GetGameHistory(): View last 10 games played
+//   - WithdrawAll(): Owner-only function to withdraw all funds
 package hitthezone
 
 import (
@@ -61,14 +81,34 @@ func safeSendCoins(recipient address, amount int64) bool {
 }
 
 // Game executes the main game logic for Hit The Zone.
-// Players specify a min and max range, and a random number (1-100) is generated.
-// If the random number falls within the range, the player wins based on the multiplier.
-// The function validates inputs, plays the game, handles payouts, and records the result.
+//
+// Players specify a min and max range (min-max), and a random number between 1-100 is generated.
+// If the random number falls within the specified range, the player wins and receives their
+// bet amount multiplied by the calculated multiplier.
+//
+// Parameters:
+//   - min: Minimum value of the range (must be >= 1 and < max)
+//   - max: Maximum value of the range (must be <= 100 and > min)
+//
+// The function requires a transaction with attached ugnot coins as the bet amount (minimum 1 ugnot).
+//
+// Multiplier calculation: 100 / (max - min + 1)
+// Example: Range 1-100 = x1.00, Range 50-50 = x100.00
+//
+// The function validates inputs, generates a random number, handles payouts (including refunds
+// if insufficient realm balance), and records the game result in history.
+//
+// Events emitted:
+//   - "PaymentSent": When winnings are successfully paid
+//   - "PaymentFailed": When payment transaction fails
+//   - "GamePayout": Detailed payout information (win/lose/refund)
+//
+// Panics if: min < 1, max > 100, min >= max, or bet amount < 1 ugnot.
 func Game(cur realm, min int, max int) {
 	runtime.AssertOriginCall()
 
 	betAmount := validateGameInputs(min, max)
-	multiplier := CalculateMultiplier(min, max)
+	multiplier := calculateMultiplier(min, max)
 	won := playGame(min, max)
 
 	caller := runtime.OriginCaller()
@@ -183,8 +223,19 @@ func recordGame(player address, min, max int, betAmount, winAmount int64, multip
 }
 
 // Donate allows users to send donations to the game owner.
-// The donated amount is transferred to the owner's address and tracked in totalDonations.
-// Panics if the donation amount is invalid or the transfer fails.
+//
+// The donated amount is transferred directly to the owner's address and tracked
+// in the totalDonations counter. This helps support the game and increase the
+// realm's bankroll for future payouts.
+//
+// The function requires a transaction with attached ugnot coins as the donation amount.
+//
+// Events emitted:
+//   - "Donation": Records the donation amount and donor address
+//   - "PaymentSent": When donation is successfully transferred
+//   - "PaymentFailed": If transfer fails
+//
+// Panics if: donation amount is 0 or negative, or if the transfer fails.
 func Donate(cur realm) {
 	runtime.AssertOriginCall()
 
@@ -206,6 +257,12 @@ func Donate(cur realm) {
 }
 
 // GetRealmBalance returns the current balance of ugnot held by the realm.
+//
+// This represents the total funds available for payouts to winning players.
+// The balance increases through player losses and donations, and decreases
+// through player wins.
+//
+// Returns: The realm's current ugnot balance as int64.
 func GetRealmBalance() int64 {
 	b := banker.NewBanker(banker.BankerTypeReadonly)
 	coins := b.GetCoins(runtime.CurrentRealm().Address())
@@ -213,11 +270,24 @@ func GetRealmBalance() int64 {
 }
 
 // GetTotalDonations returns the total amount of donations received by the game.
+//
+// This counter tracks all donations sent to the owner via the Donate function.
+// It does not include funds from player losses.
+//
+// Returns: The cumulative donation amount as int64.
 func GetTotalDonations() int64 {
 	return totalDonations
 }
 
 // GetGameHistory returns the last 10 games played, ordered from most recent to oldest.
+//
+// Each game record includes: player address, min/max range, random number generated,
+// result (Win/Lose), bet amount, win amount, multiplier, and timestamp.
+//
+// The history is maintained in a FIFO queue with a maximum size of 10 entries.
+// Older games are automatically removed when new games are played.
+//
+// Returns: A slice of GameHistory structs, maximum 10 entries, newest first.
 func GetGameHistory() []GameHistory {
 	history := make([]GameHistory, 0, 10)
 
@@ -238,10 +308,25 @@ func GetGameHistory() []GameHistory {
 	return history
 }
 
-// CalculateMultiplier calculates the payout multiplier based on the chosen range.
-// A smaller range results in a higher multiplier (up to x100 for a single number).
-// Returns 0.0 if the range is invalid.
-func CalculateMultiplier(min, max int) float64 {
+// calculateMultiplier calculates the payout multiplier based on the chosen range.
+//
+// The multiplier is inversely proportional to the range size: smaller ranges
+// offer higher multipliers, making single-number bets the most rewarding but riskiest.
+//
+// Formula: 100.0 / (max - min + 1)
+//
+// Examples:
+//   - Range 1-100 (full range): x1.00 multiplier
+//   - Range 1-50 (half range): x2.00 multiplier
+//   - Range 45-55 (11 numbers): x9.09 multiplier
+//   - Range 50-50 (single number): x100.00 multiplier
+//
+// Parameters:
+//   - min: Minimum value of the range
+//   - max: Maximum value of the range
+//
+// Returns: The calculated multiplier as float64, or 0.0 if range is invalid.
+func calculateMultiplier(min, max int) float64 {
 	if min < 0 || max > 100 || min > max {
 		return 0.0
 	}
@@ -250,8 +335,20 @@ func CalculateMultiplier(min, max int) float64 {
 }
 
 // WithdrawAll allows the owner to withdraw all funds from the realm.
-// Only the owner can call this function.
-// Panics if called by a non-owner or if the withdrawal fails.
+//
+// This function transfers the entire realm balance to the owner's address.
+// It is restricted to the realm owner (the address that deployed the realm).
+//
+// Security: Only the owner address (set at realm initialization) can call this function.
+//
+// Events emitted:
+//   - "PaymentSent": When withdrawal is successful
+//   - "PaymentFailed": If transfer fails
+//
+// Panics if:
+//   - Caller is not the owner
+//   - Realm balance is 0 or negative
+//   - Transfer fails
 func WithdrawAll(cur realm) {
 	runtime.AssertOriginCall()
 
