@@ -7,35 +7,26 @@ import (
 	"gno.land/p/nt/ufmt"
 )
 
-// =============================================================================
-// SVG WIDGET GENERATION
-// =============================================================================
-
-// RenderWidget generates a standalone SVG widget for embedding (public function)
-func RenderWidget(addr address) string {
-	return GenerateTrustWidget(addr)
-}
-
-// RenderCallerWidget generates a widget for the caller's address (no parameters needed)
-// This is the recommended function for external realms
+// RenderCallerWidget generates an SVG trust score widget for the calling realm's address.
+// This is the recommended function for external realms wanting to display their trust score.
 func RenderCallerWidget() string {
 	caller := runtime.PreviousRealm().Address()
 	return GenerateTrustWidget(caller)
 }
 
-// RenderOriginCallerWidget generates a widget for the origin caller (end user)
-// Perfect for home realms that want to display visitor's trust score
+// RenderOriginCallerWidget generates an SVG trust score widget for the origin caller (end user).
+// Perfect for home realms that want to display the visitor's trust score.
 func RenderOriginCallerWidget() string {
 	originCaller := runtime.OriginCaller()
 	return GenerateTrustWidget(originCaller)
 }
 
-// GenerateTrustWidget creates an SVG widget displaying trust score
+// GenerateTrustWidget creates an SVG widget displaying the trust score for a given address.
+// The widget includes the address, composite score, and a confidence indicator.
 func GenerateTrustWidget(addr address) string {
 	trust := GetTrustDetails(addr)
 	compositeScore := calculateCompositeScore(trust)
 
-	// Widget dimensions
 	const (
 		width       = 300
 		height      = 150
@@ -55,7 +46,7 @@ func GenerateTrustWidget(addr address) string {
 	return canvas.Render("TrustFactor Widget")
 }
 
-// createCanvas creates and configures the SVG canvas
+// createCanvas initializes an SVG canvas with predefined styles for text elements.
 func createCanvas(width, height int) *svg.Canvas {
 	return svg.NewCanvas(width, height).
 		WithViewBox(0, 0, width, height).
@@ -65,7 +56,7 @@ func createCanvas(width, height int) *svg.Canvas {
 		AddStyle(".label", "font-size:14px;fill:#666;")
 }
 
-// createBackground creates the widget background with rounded corners
+// createBackground generates a white rounded rectangle as the widget background.
 func createBackground(padding, width, height int) *svg.Rectangle {
 	bg := svg.NewRectangle(padding, padding, width-(padding*2), height-(padding*2), "#ffffff")
 	bg.RX = 15
@@ -75,7 +66,7 @@ func createBackground(padding, width, height int) *svg.Rectangle {
 	return bg
 }
 
-// createAddressText creates the address text element
+// createAddressText creates an SVG text element displaying the shortened address.
 func createAddressText(addr address, width int) *svg.Text {
 	shortAddr := string(addr)
 	if len(shortAddr) > 20 {
@@ -86,7 +77,7 @@ func createAddressText(addr address, width int) *svg.Text {
 	return addrText
 }
 
-// createScoreText creates the trust score text element
+// createScoreText creates an SVG text element displaying the trust score value.
 func createScoreText(score float64, width, height int) *svg.Text {
 	scoreText := ufmt.Sprintf("%.1f", score)
 	scoreDisplay := svg.NewText(width/2, height/2+10, scoreText, "#000000")
@@ -94,14 +85,14 @@ func createScoreText(score float64, width, height int) *svg.Text {
 	return scoreDisplay
 }
 
-// createLabelText creates the "Trust Score" label element
+// createLabelText creates an SVG text element with the "Trust Score" label.
 func createLabelText(width, height int) *svg.Text {
 	label := svg.NewText(width/2, height-30, "Trust Score", "#666")
 	label.Attr.Class = "label"
 	return label
 }
 
-// createConfidenceIndicator creates the confidence indicator circle
+// createConfidenceIndicator creates a colored circle indicator based on confidence level.
 func createConfidenceIndicator(confidence float64, width int) *svg.Circle {
 	circleColor := getConfidenceColor(confidence)
 	indicator := svg.NewCircle(width-30, 30, 6, circleColor)

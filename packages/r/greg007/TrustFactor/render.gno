@@ -1,6 +1,7 @@
 package trustfactor
 
 import (
+    "net/url"
     "strconv"
     "strings"
 
@@ -9,37 +10,24 @@ import (
     "gno.land/p/moul/md"
 )
 
-// =============================================================================
-// URL PARAMETER EXTRACTION
-// =============================================================================
-
-// extractSearchParam extracts the search parameter from URL query string
+// extractSearchParam parses and extracts the "search" query parameter from a URL path.
+// Returns an empty string if no search parameter is found or if URL parsing fails.
 func extractSearchParam(path string) string {
-    searchVal := ""
-
-    if strings.Contains(path, "?") {
-        parts := strings.Split(path, "?")
-        if len(parts) > 1 {
-            params := strings.Split(parts[1], "&")
-            for _, param := range params {
-                keyVal := strings.Split(param, "=")
-                if len(keyVal) == 2 {
-                    if keyVal[0] == "search" {
-                        searchVal = keyVal[1]
-                    }
-                }
-            }
-        }
+    if !strings.Contains(path, "?") {
+        return ""
     }
 
-    return searchVal
+    u, err := url.Parse(path)
+    if err != nil {
+        return ""
+    }
+
+    return u.Query().Get("search")
 }
 
-// =============================================================================
-// SEARCH RESULTS RENDERING
-// =============================================================================
-
-// renderSearchResults displays search results for user queries
+// renderSearchResults displays filtered user search results based on the query string.
+// If the query exactly matches an address, the user's profile is shown directly.
+// Otherwise, partial matches are displayed with their trust scores and action buttons.
 func renderSearchResults(query string) string {
     if query == "" {
         return "Please enter an address to search."
@@ -55,25 +43,19 @@ func renderSearchResults(query string) string {
     var matches []address
     for addr := range GetAllUsers() {
         addrStr := string(addr)
-        if len(query) >= 4 && len(addrStr) >= len(query) {
-            for i := 0; i <= len(addrStr)-len(query); i++ {
-                if addrStr[i:i+len(query)] == query {
-                    matches = append(matches, addr)
-                    break
-                }
-            }
+        if len(query) >= 4 && strings.Contains(addrStr, query) {
+            matches = append(matches, addr)
         }
     }
 
     if len(matches) == 0 {
         result += "❌ " + md.Bold("No users found") + "\n\n"
         result += md.Bold("Suggestions:") + "\n"
-        suggestions := []string{
+        result += md.BulletList([]string{
             "Check the address spelling",
             "Try with at least 4 characters",
             "User must be registered in the system",
-        }
-        result += md.BulletList(suggestions) + "\n"
+        }) + "\n"
     } else if len(matches) == 1 {
         return renderUserProfile(string(matches[0]))
     } else {
@@ -82,11 +64,11 @@ func renderSearchResults(query string) string {
         for _, addr := range matches {
             trust := GetTrustDetails(addr)
             compositeScore := calculateCompositeScore(trust)
+            displayName := getDisplayName(addr)
 
-            result += md.H3(string(addr))
-
-            confidenceIcon := getConfidenceIcon(trust.Confidence)
-            result += md.Bold("Trust Score: ") + ufmt.Sprintf("%.2f", compositeScore) + "/10.0 " + confidenceIcon + "\n"
+            result += md.H3(displayName)
+            result += md.Italic("(" + md.InlineCode(string(addr)) + ")") + "\n\n"
+            result += md.Bold("Trust Score: ") + ufmt.Sprintf("%.2f", compositeScore) + "/10.0 " + getConfidenceIcon(trust.Confidence) + "\n"
             result += md.Bold("Votes: ") + strconv.Itoa(trust.TotalVotes) + " total\n\n"
 
             detailURL := "/r/greg007/trustfactor:" + string(addr)
@@ -101,37 +83,36 @@ func renderSearchResults(query string) string {
     }
 
     result += svgbtn.SmallButton(100, 30, "← Back", "/r/greg007/trustfactor")
-
     return result
 }
 
-// Render user profile
+// renderUserProfile generates a detailed user profile page including trust score,
+// voting statistics, vote history, and comments section.
 func renderUserProfile(path string) string {
     addr := address(path)
     trust := GetTrustDetails(addr)
 
     if trust.Score == 0 && trust.LastUpdate == 0 {
-        result := "# ❌ User Not Found\n\n"
+        result := md.H1("❌ User Not Found") + "\n"
         result += "No trust score found for address: `" + path + "`\n\n"
-        result += "**Suggestions:**\n"
-        result += "- Check that the address is correct (g1... format)\n"
-        result += "- User must register first\n\n"
-
-        backURL := "/r/greg007/trustfactor"
-        result += svgbtn.PrimaryButton(150, 35, "← Back", backURL)
+        result += md.Bold("Suggestions:") + "\n"
+        result += md.BulletList([]string{
+            "Check that the address is correct (g1... format)",
+            "User must register first",
+        }) + "\n"
+        result += svgbtn.PrimaryButton(150, 35, "← Back", "/r/greg007/trustfactor")
         return result
     }
 
-    result := md.H2("👤 Profile: " + md.InlineCode(path))
-
-    // Display SVG Widget
+    displayName := getDisplayName(addr)
+    result := md.H2("👤 Profile: " + displayName)
+    result += md.Italic(md.InlineCode(path)) + "\n\n"
 
     result += md.H2("📊 Score")
     result += GenerateTrustWidget(addr) + "\n\n"
-    scoreItems := []string{
+    result += md.BulletList([]string{
         "**Confidence Level:** " + ufmt.Sprintf("%.1f%%", trust.Confidence*100),
-    }
-    result += md.BulletList(scoreItems) + "\n"
+    }) + "\n"
 
     result += md.H2("🗳️ Vote Statistics")
     voteItems := []string{
@@ -139,22 +120,18 @@ func renderUserProfile(path string) string {
         "**Positive Votes:** 👍 " + strconv.Itoa(trust.PositiveVotes),
         "**Negative Votes:** 👎 " + strconv.Itoa(trust.NegativeVotes),
     }
-
     if trust.TotalVotes > 0 {
         positiveRatio := float64(trust.PositiveVotes) / float64(trust.TotalVotes) * 100
-        voteItems = append(voteItems, "**Positive Ratio:** " + ufmt.Sprintf("%.1f%%", positiveRatio))
+        voteItems = append(voteItems, "**Positive Ratio:** "+ufmt.Sprintf("%.1f%%", positiveRatio))
     }
     result += md.BulletList(voteItems) + "\n"
 
     result += md.H2("⏰ Time Information")
-
-    timeItems := []string{
+    result += md.BulletList([]string{
         "**Last Activity:** " + formatTimeAgo(trust.LastUpdate),
         "**Time Impact:** " + ufmt.Sprintf("%.1f%%", getTimeDecayFactor(trust.LastUpdate)*100) + " (score freshness)",
-    }
-    result += md.BulletList(timeItems) + "\n"
+    }) + "\n"
 
-    // Recent vote history (last 5)
     history := GetVoteHistory(addr)
     if len(history) > 0 {
         result += md.H2("📋 Recent Vote History")
@@ -170,8 +147,8 @@ func renderUserProfile(path string) string {
             if vote.VoteType == "downvote" {
                 voteIcon = "👎"
             }
-            shortVoter := shortenAddress(string(vote.Voter), 12, 0) + "..."
-            historyItems = append(historyItems, voteIcon + " by " + md.InlineCode(shortVoter) + " (weight: " + ufmt.Sprintf("%.1f", vote.Weight) + ")")
+            voterName := getDisplayName(vote.Voter)
+            historyItems = append(historyItems, voteIcon+" by "+md.InlineCode(voterName)+" (weight: "+ufmt.Sprintf("%.1f", vote.Weight)+")")
         }
         result += md.BulletList(historyItems) + "\n"
     }
@@ -179,27 +156,18 @@ func renderUserProfile(path string) string {
     result += md.H2("🎯 Actions")
     upvoteURL := "https://gno.land/r/greg007/trustfactor$help&func=Upvote&target=" + string(addr)
     downvoteURL := "https://gno.land/r/greg007/trustfactor$help&func=Downvote&target=" + string(addr)
-    backURL := "/r/greg007/trustfactor"
 
     result += svgbtn.SuccessButton(100, 35, "👍 Upvote", upvoteURL) + " "
     result += svgbtn.DangerButton(100, 35, "👎 Downvote", downvoteURL) + " "
-    result += svgbtn.PrimaryButton(100, 35, "← Back", backURL)
-    result += "\n\n"
+    result += svgbtn.PrimaryButton(100, 35, "← Back", "/r/greg007/trustfactor") + "\n\n"
 
-    // Comments section
     result += md.H2("💬 Comments (" + strconv.Itoa(GetCommentCount(addr)) + ")")
-
-    // Comment button
     commentURL := "https://gno.land/r/greg007/trustfactor$help&func=AddComment&target=" + string(addr) + "&text="
-    result += svgbtn.PrimaryButton(150, 35, "💬 Leave a comment", commentURL)
-    result += "\n\n"
+    result += svgbtn.PrimaryButton(150, 35, "💬 Leave a comment", commentURL) + "\n\n"
 
-    // Display existing comments
     comments := GetComments(addr)
     if len(comments) > 0 {
         result += md.Bold("Recent comments:") + "\n\n"
-
-        // Limit to last 10 comments
         displayCount := 10
         if len(comments) < displayCount {
             displayCount = len(comments)
@@ -207,11 +175,10 @@ func renderUserProfile(path string) string {
 
         for i := 0; i < displayCount; i++ {
             comment := comments[i]
-            timeStr := formatTimeAgoShort(comment.Timestamp)
-            shortAuthor := shortenAddress(string(comment.Author), 12, 0) + "..."
+            authorName := getDisplayName(comment.Author)
 
             result += md.HorizontalRule()
-            result += md.Bold(shortAuthor) + " - " + md.Italic(timeStr) + "\n\n"
+            result += md.Bold(authorName) + " - " + md.Italic(formatTimeAgo(comment.Timestamp)) + "\n\n"
             result += md.Blockquote(comment.Text)
         }
     } else {
@@ -221,18 +188,13 @@ func renderUserProfile(path string) string {
     return result
 }
 
-// =============================================================================
-// MAIN PAGE RENDERING
-// =============================================================================
-
-// renderMainPageWithFilter displays the main page with optional search filtering
+// renderMainPageWithFilter displays the main TrustFactor registry page with
+// optional search filtering, popular users section, and paginated user listings.
 func renderMainPageWithFilter(filter string) string {
     result := md.H1("TrustFactor Registry")
 
-    // Registration button
     registerURL := "https://gno.land/r/greg007/trustfactor$help&func=Register"
-    result += svgbtn.SuccessButton(200, 40, "✓ Register (Score: 5.0)", registerURL)
-    result += "\n\n"
+    result += svgbtn.SuccessButton(200, 40, "✓ Register (Score: 5.0)", registerURL) + "\n\n"
 
     result += md.H2("🔍 Search Users")
 
@@ -248,15 +210,13 @@ func renderMainPageWithFilter(filter string) string {
 `
 
     result += md.Bold("💡 How to use search:") + "\n"
-    searchSteps := []string{
+    result += md.OrderedList([]string{
         "Type part of the address in the field above",
         "Press Enter or click Submit",
         "URL will change to " + md.InlineCode("/r/greg007/trustfactor?search=YOUR_TERM"),
         "Page will reload with filtered results",
-    }
-    result += md.OrderedList(searchSteps) + "\n"
+    }) + "\n"
 
-    // Popular users
     var topUsers []address
     allUsers := GetAllUsers()
     for addr, trust := range allUsers {
@@ -272,11 +232,11 @@ func renderMainPageWithFilter(filter string) string {
         result += md.Bold("⭐ Popular Users:") + "\n\n"
         for i, addr := range topUsers {
             trust := GetTrustDetails(addr)
-            shortAddr := shortenAddress(string(addr), 12, 0) + "..."
+            displayName := getDisplayName(addr)
             userURL := "/r/greg007/trustfactor:" + string(addr)
             compositeScore := calculateCompositeScore(trust)
 
-            result += svgbtn.TextButton(140, 30, ufmt.Sprintf("🔍 %s (%.1f)", shortAddr, compositeScore), userURL)
+            result += svgbtn.TextButton(140, 30, ufmt.Sprintf("🔍 %s (%.1f)", displayName, compositeScore), userURL)
             if i < len(topUsers)-1 {
                 result += " "
             }
@@ -287,9 +247,7 @@ func renderMainPageWithFilter(filter string) string {
     result += md.H2("Trust Scores for Addresses:")
 
     const USERS_PER_PAGE = 20
-    offset := 0
-
-    filteredAddrs, _ := FilterUsers(filter, USERS_PER_PAGE, offset)
+    filteredAddrs, _ := FilterUsers(filter, USERS_PER_PAGE, 0)
 
     var users []UserDisplay
     for _, addr := range filteredAddrs {
@@ -314,27 +272,23 @@ func renderMainPageWithFilter(filter string) string {
     }
 
     for _, user := range users {
-        addr := user.addr
-        trust := user.trust
-        compositeScore := user.compositeScore
+        displayName := getDisplayName(user.addr)
+        detailURL := "/r/greg007/trustfactor:" + string(user.addr)
 
-        shortAddr := shortenAddress(string(addr), 12, 0) + "..."
-        detailURL := "/r/greg007/trustfactor:" + string(addr)
+        result += md.H3(svgbtn.TextButton(200, 30, "🔍 "+displayName, detailURL))
+        result += md.Italic("(" + md.InlineCode(string(user.addr)) + ")") + "\n\n"
 
-        result += md.H3(svgbtn.TextButton(200, 30, "🔍 " + shortAddr, detailURL))
+        result += md.Bold("Trust Score: ") + ufmt.Sprintf("%.2f", user.compositeScore) + "/10.0 " + getConfidenceIcon(user.trust.Confidence)
+        result += " " + md.Bold("Votes: ") + strconv.Itoa(user.trust.TotalVotes)
 
-        confidenceIcon := getConfidenceIcon(trust.Confidence)
-        result += md.Bold("Trust Score: ") + ufmt.Sprintf("%.2f", compositeScore) + "/10.0 " + confidenceIcon
-        result += " " + md.Bold("Votes: ") + strconv.Itoa(trust.TotalVotes)
-
-        if trust.TotalVotes > 0 {
-            ratio := float64(trust.PositiveVotes) / float64(trust.TotalVotes) * 100
+        if user.trust.TotalVotes > 0 {
+            ratio := float64(user.trust.PositiveVotes) / float64(user.trust.TotalVotes) * 100
             result += " (" + ufmt.Sprintf("%.0f%% positive", ratio) + ")"
         }
         result += "\n\n"
 
-        upvoteURL := "https://gno.land/r/greg007/trustfactor$help&func=Upvote&target=" + string(addr)
-        downvoteURL := "https://gno.land/r/greg007/trustfactor$help&func=Downvote&target=" + string(addr)
+        upvoteURL := "https://gno.land/r/greg007/trustfactor$help&func=Upvote&target=" + string(user.addr)
+        downvoteURL := "https://gno.land/r/greg007/trustfactor$help&func=Downvote&target=" + string(user.addr)
 
         result += svgbtn.SuccessButton(80, 30, "👍", upvoteURL) + " "
         result += svgbtn.DangerButton(80, 30, "👎", downvoteURL) + " "

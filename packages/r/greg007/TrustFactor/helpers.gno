@@ -3,13 +3,12 @@ package trustfactor
 import (
 	"strconv"
 	"time"
+
+	"gno.land/r/sys/users"
 )
 
-// =============================================================================
-// TIME FORMATTING HELPERS
-// =============================================================================
-
-// formatTimeAgo formats a Unix timestamp into a human-readable "time ago" string
+// formatTimeAgo converts a Unix timestamp into a human-readable relative time string.
+// The format varies based on the time elapsed: "Today", "N days ago", "N week(s) ago", etc.
 func formatTimeAgo(timestamp int64) string {
 	now := time.Now().Unix()
 	daysSince := (now - timestamp) / 86400
@@ -36,34 +35,23 @@ func formatTimeAgo(timestamp int64) string {
 	return strconv.FormatInt(years, 10) + " year(s) ago"
 }
 
-// formatTimeAgoShort formats a Unix timestamp into a short "time ago" string
-func formatTimeAgoShort(timestamp int64) string {
-	now := time.Now().Unix()
-	daysSince := (now - timestamp) / 86400
+// getDisplayName returns the registered username from sys/users, or a shortened
+// address if no username is registered for the given address.
+func getDisplayName(addr address) string {
+	userData := users.ResolveAddress(addr)
 
-	if daysSince == 0 {
-		return "today"
-	}
-	if daysSince == 1 {
-		return "1 day ago"
-	}
-	if daysSince < 7 {
-		return strconv.FormatInt(daysSince, 10) + " days ago"
-	}
-	if daysSince < 30 {
-		weeks := daysSince / 7
-		return strconv.FormatInt(weeks, 10) + " week(s) ago"
+	if userData != nil {
+		name := userData.Name()
+		if name != "" {
+			return name
+		}
 	}
 
-	months := daysSince / 30
-	return strconv.FormatInt(months, 10) + " month(s) ago"
+	return shortenAddress(string(addr), 12, 4)
 }
 
-// =============================================================================
-// ADDRESS FORMATTING HELPERS
-// =============================================================================
-
-// shortenAddress shortens a long address for display
+// shortenAddress truncates a long address string to show only the prefix and suffix,
+// separated by "..." for display purposes.
 func shortenAddress(addr string, prefixLen, suffixLen int) string {
 	if len(addr) <= prefixLen+suffixLen {
 		return addr
@@ -71,11 +59,8 @@ func shortenAddress(addr string, prefixLen, suffixLen int) string {
 	return addr[:prefixLen] + "..." + addr[len(addr)-suffixLen:]
 }
 
-// =============================================================================
-// CONFIDENCE ICON HELPERS
-// =============================================================================
-
-// getConfidenceIcon returns an emoji icon based on confidence level
+// getConfidenceIcon returns an emoji icon representing the confidence level:
+// 🟢 for high (≥0.8), 🟡 for medium (≥0.5), 🔴 for low (<0.5).
 func getConfidenceIcon(confidence float64) string {
 	if confidence >= 0.8 {
 		return "🟢"
@@ -86,13 +71,14 @@ func getConfidenceIcon(confidence float64) string {
 	return "🔴"
 }
 
-// getConfidenceColor returns a color based on confidence level (for SVG)
+// getConfidenceColor returns a hex color code based on confidence level for SVG rendering:
+// black for high confidence, dark gray for medium, light gray for low.
 func getConfidenceColor(confidence float64) string {
 	if confidence >= 0.8 {
-		return "#000000" // black
+		return "#000000"
 	}
 	if confidence >= 0.5 {
-		return "#666666" // dark gray
+		return "#666666"
 	}
-	return "#CCCCCC" // light gray
+	return "#CCCCCC"
 }
