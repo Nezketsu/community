@@ -1,7 +1,7 @@
 package trustfactor
 
 import (
-	"std"
+	"chain/runtime"
 
 	"gno.land/p/demo/svg"
 	"gno.land/p/nt/ufmt"
@@ -12,26 +12,26 @@ import (
 // =============================================================================
 
 // RenderWidget generates a standalone SVG widget for embedding (public function)
-func RenderWidget(addr std.Address) string {
+func RenderWidget(addr address) string {
 	return GenerateTrustWidget(addr)
 }
 
 // RenderCallerWidget generates a widget for the caller's address (no parameters needed)
 // This is the recommended function for external realms
 func RenderCallerWidget() string {
-	caller := std.PreviousRealm().Address()
+	caller := runtime.PreviousRealm().Address()
 	return GenerateTrustWidget(caller)
 }
 
 // RenderOriginCallerWidget generates a widget for the origin caller (end user)
 // Perfect for home realms that want to display visitor's trust score
 func RenderOriginCallerWidget() string {
-	originCaller := std.OriginCaller()
+	originCaller := runtime.OriginCaller()
 	return GenerateTrustWidget(originCaller)
 }
 
 // GenerateTrustWidget creates an SVG widget displaying trust score
-func GenerateTrustWidget(addr std.Address) string {
+func GenerateTrustWidget(addr address) string {
 	trust := GetTrustDetails(addr)
 	compositeScore := calculateCompositeScore(trust)
 
@@ -76,7 +76,7 @@ func createBackground(padding, width, height int) *svg.Rectangle {
 }
 
 // createAddressText creates the address text element
-func createAddressText(addr std.Address, width int) *svg.Text {
+func createAddressText(addr address, width int) *svg.Text {
 	shortAddr := string(addr)
 	if len(shortAddr) > 20 {
 		shortAddr = shortenAddress(shortAddr, 10, 7)

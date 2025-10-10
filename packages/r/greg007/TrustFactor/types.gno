@@ -1,8 +1,7 @@
 package trustfactor
 
-import (
-    "std"
-)
+import ()
+
 
 // =============================================================================
 // DATA STRUCTURES
@@ -12,7 +11,7 @@ import (
 type TrustScore struct {
     Score          float64     // Base trust score (0-10)
     LastUpdate     int64       // Unix timestamp of last update
-    Evaluator      std.Address // Address of last evaluator
+    Evaluator      address // Address of last evaluator
     TotalVotes     int         // Total number of votes received
     PositiveVotes  int         // Number of upvotes received
     NegativeVotes  int         // Number of downvotes received
@@ -22,7 +21,7 @@ type TrustScore struct {
 
 // VoteHistory tracks individual voting events for transparency
 type VoteHistory struct {
-    Voter     std.Address // Address of the voter
+    Voter     address // Address of the voter
     VoteType  string      // "upvote" or "downvote"
     Weight    float64     // Weight of the voter's trust score
     Timestamp int64       // Unix timestamp of the vote
@@ -30,14 +29,14 @@ type VoteHistory struct {
 
 // UserDisplay is used for rendering user information in lists
 type UserDisplay struct {
-    addr           std.Address // User's address
+    addr           address // User's address
     trust          TrustScore  // User's trust score data
     compositeScore float64     // Calculated composite score
 }
 
 // Comment represents a user comment on a profile
 type Comment struct {
-    Author    std.Address // Address of the comment author
+    Author    address // Address of the comment author
     Text      string      // Comment text content
     Timestamp int64       // Unix timestamp of the comment
 }

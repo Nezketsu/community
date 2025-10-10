@@ -1,7 +1,6 @@
 package trustfactor
 
 import (
-    "std"
     "strconv"
     "strings"
 
@@ -46,14 +45,14 @@ func renderSearchResults(query string) string {
         return "Please enter an address to search."
     }
 
-    addr := std.Address(query)
+    addr := address(query)
     if _, exists := GetAllUsers()[addr]; exists {
         return renderUserProfile(string(addr))
     }
 
     result := md.H1("🔍 Search results for: " + md.InlineCode(query))
 
-    var matches []std.Address
+    var matches []address
     for addr := range GetAllUsers() {
         addrStr := string(addr)
         if len(query) >= 4 && len(addrStr) >= len(query) {
@@ -108,7 +107,7 @@ func renderSearchResults(query string) string {
 
 // Render user profile
 func renderUserProfile(path string) string {
-    addr := std.Address(path)
+    addr := address(path)
     trust := GetTrustDetails(addr)
 
     if trust.Score == 0 && trust.LastUpdate == 0 {
@@ -258,7 +257,7 @@ func renderMainPageWithFilter(filter string) string {
     result += md.OrderedList(searchSteps) + "\n"
 
     // Popular users
-    var topUsers []std.Address
+    var topUsers []address
     allUsers := GetAllUsers()
     for addr, trust := range allUsers {
         if trust.TotalVotes >= 3 {

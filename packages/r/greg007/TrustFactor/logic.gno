@@ -1,10 +1,10 @@
 package trustfactor
 
 import (
-    "std"
     "strings"
     "time"
 
+    "chain/runtime"
     "gno.land/p/nt/avl"
 )
 
@@ -12,14 +12,14 @@ import (
 // GLOBAL STATE VARIABLES
 // =============================================================================
 
-var trustScores map[std.Address]TrustScore        // Main storage for user trust scores
+var trustScores map[address]TrustScore        // Main storage for user trust scores
 var userVotes map[string]bool                     // Tracks votes in "voter_target" format
-var voteHistory map[std.Address][]VoteHistory     // Historical vote records per user
-var userComments map[std.Address]*avl.Tree        // User comments storage using AVL tree
-var owner std.Address                             // Contract owner address
+var voteHistory map[address][]VoteHistory     // Historical vote records per user
+var userComments map[address]*avl.Tree        // User comments storage using AVL tree
+var owner address                             // Contract owner address
 
 // Performance optimization cache
-var sortedUsers []std.Address // Cached sorted user list
+var sortedUsers []address // Cached sorted user list
 var lastSortTime int64        // Last cache update timestamp
 var totalUsers int            // Total registered users count
 
@@ -35,13 +35,13 @@ const SORT_CACHE_TTL = 300    // Cache time-to-live in seconds
 // =============================================================================
 
 func init() {
-    trustScores = make(map[std.Address]TrustScore)
+    trustScores = make(map[address]TrustScore)
     userVotes = make(map[string]bool)
-    voteHistory = make(map[std.Address][]VoteHistory)
-    userComments = make(map[std.Address]*avl.Tree)
-    owner = std.Address("g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5")
+    voteHistory = make(map[address][]VoteHistory)
+    userComments = make(map[address]*avl.Tree)
+    owner = address("g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5")
 
-    sortedUsers = make([]std.Address, 0)
+    sortedUsers = make([]address, 0)
     lastSortTime = 0
     totalUsers = 0
 }
@@ -51,8 +51,8 @@ func init() {
 // =============================================================================
 
 // Register allows a user to join the TrustFactor system with an initial score of 5.0
-func Register(_ realm) {
-    caller := std.PreviousRealm().Address()
+func Register(cur realm) {
+    caller := runtime.OriginCaller()
 
     if _, exists := trustScores[caller]; exists {
         panic("user already registered")
@@ -78,7 +78,7 @@ func Register(_ realm) {
 // =============================================================================
 
 // GetTrustScore returns the raw trust score for a user
-func GetTrustScore(addr std.Address) (float64, bool) {
+func GetTrustScore(addr address) (float64, bool) {
     trust, exists := trustScores[addr]
     if !exists {
         return 0.0, false
@@ -87,7 +87,7 @@ func GetTrustScore(addr std.Address) (float64, bool) {
 }
 
 // GetCompositeScore returns the calculated composite score (with time decay and confidence)
-func GetCompositeScore(addr std.Address) (float64, bool) {
+func GetCompositeScore(addr address) (float64, bool) {
     trust, exists := trustScores[addr]
     if !exists {
         return 0.0, false
@@ -96,7 +96,7 @@ func GetCompositeScore(addr std.Address) (float64, bool) {
 }
 
 // GetTrustDetails returns the complete TrustScore struct for a user
-func GetTrustDetails(addr std.Address) TrustScore {
+func GetTrustDetails(addr address) TrustScore {
     trust, exists := trustScores[addr]
     if !exists {
         return TrustScore{Score: 0, LastUpdate: 0, Evaluator: ""}
@@ -164,8 +164,8 @@ func calculateCompositeScore(trust TrustScore) float64 {
 // =============================================================================
 
 // Upvote increases a user's trust score based on the voter's own reputation
-func Upvote(_ realm, target std.Address) {
-    caller := std.PreviousRealm().Address()
+func Upvote(cur realm, target address) {
+    caller := runtime.OriginCaller()
 
     voterTrust, voterExists := trustScores[caller]
     if !voterExists {
@@ -230,8 +230,8 @@ func Upvote(_ realm, target std.Address) {
 }
 
 // Downvote decreases a user's trust score based on the voter's own reputation
-func Downvote(_ realm, target std.Address) {
-    caller := std.PreviousRealm().Address()
+func Downvote(cur realm, target address) {
+    caller := runtime.OriginCaller()
 
     voterTrust, voterExists := trustScores[caller]
     if !voterExists {
@@ -300,12 +300,12 @@ func Downvote(_ realm, target std.Address) {
 // =============================================================================
 
 // GetAllUsers returns the complete trust scores map (used internally)
-func GetAllUsers() map[std.Address]TrustScore {
+func GetAllUsers() map[address]TrustScore {
     return trustScores
 }
 
 // GetVoteHistory returns the voting history for a specific user
-func GetVoteHistory(addr std.Address) []VoteHistory {
+func GetVoteHistory(addr address) []VoteHistory {
     return voteHistory[addr]
 }
 
@@ -316,11 +316,11 @@ func GetVoteHistory(addr std.Address) []VoteHistory {
 // invalidateCache clears the sorted user cache when data changes
 func invalidateCache() {
     lastSortTime = 0
-    sortedUsers = make([]std.Address, 0)
+    sortedUsers = make([]address, 0)
 }
 
 // GetSortedUsers returns users sorted by composite score with caching
-func GetSortedUsers() []std.Address {
+func GetSortedUsers() []address {
     now := time.Now().Unix()
 
     // Check if cache is still valid
@@ -333,9 +333,9 @@ func GetSortedUsers() []std.Address {
 }
 
 // rebuildSortCache rebuilds the sorted user cache using optimized quicksort
-func rebuildSortCache() []std.Address {
+func rebuildSortCache() []address {
     // Convert map to slice for sorting
-    users := make([]std.Address, 0, len(trustScores))
+    users := make([]address, 0, len(trustScores))
     for addr := range trustScores {
         users = append(users, addr)
     }
@@ -352,7 +352,7 @@ func rebuildSortCache() []std.Address {
 }
 
 // quickSortByScore implements quicksort algorithm for user addresses by composite score
-func quickSortByScore(users []std.Address, low, high int) {
+func quickSortByScore(users []address, low, high int) {
     if low < high {
         pi := partitionByScore(users, low, high)
         quickSortByScore(users, low, pi-1)
@@ -361,7 +361,7 @@ func quickSortByScore(users []std.Address, low, high int) {
 }
 
 // partitionByScore partitions the array for quicksort (descending order)
-func partitionByScore(users []std.Address, low, high int) int {
+func partitionByScore(users []address, low, high int) int {
     pivotScore := calculateCompositeScore(trustScores[users[high]])
     i := low - 1
 
@@ -382,7 +382,7 @@ func partitionByScore(users []std.Address, low, high int) int {
 // =============================================================================
 
 // FilterUsers returns paginated and filtered user results
-func FilterUsers(searchTerm string, limit int, offset int) ([]std.Address, int) {
+func FilterUsers(searchTerm string, limit int, offset int) ([]address, int) {
     if searchTerm == "" {
         sorted := GetSortedUsers()
         total := len(sorted)
@@ -392,13 +392,13 @@ func FilterUsers(searchTerm string, limit int, offset int) ([]std.Address, int) 
             end = total
         }
         if offset > total {
-            return []std.Address{}, total
+            return []address{}, total
         }
 
         return sorted[offset:end], total
     }
 
-    var filtered []std.Address
+    var filtered []address
     for _, addr := range GetSortedUsers() {
         addrStr := string(addr)
         if containsSubstring(addrStr, searchTerm) {
@@ -412,7 +412,7 @@ func FilterUsers(searchTerm string, limit int, offset int) ([]std.Address, int) 
         end = total
     }
     if offset > total {
-        return []std.Address{}, total
+        return []address{}, total
     }
 
     return filtered[offset:end], total
@@ -452,7 +452,7 @@ func GetPerformanceStats() (int, int, int64) {
 // =============================================================================
 
 // QueryTrustScore returns the calculated composite trust score for external use
-func QueryTrustScore(addr std.Address) (float64, bool) {
+func QueryTrustScore(addr address) (float64, bool) {
     trust, exists := trustScores[addr]
     if !exists {
         return 0.0, false
@@ -461,7 +461,7 @@ func QueryTrustScore(addr std.Address) (float64, bool) {
 }
 
 // QueryUserDetails returns comprehensive user information for external realms
-func QueryUserDetails(addr std.Address) (float64, int, float64, bool) {
+func QueryUserDetails(addr address) (float64, int, float64, bool) {
     trust, exists := trustScores[addr]
     if !exists {
         return 0.0, 0, 0.0, false
@@ -472,13 +472,13 @@ func QueryUserDetails(addr std.Address) (float64, int, float64, bool) {
 }
 
 // IsTrustedUser checks if a user meets a minimum trust threshold
-func IsTrustedUser(addr std.Address, minScore float64) bool {
+func IsTrustedUser(addr address, minScore float64) bool {
     score, exists := QueryTrustScore(addr)
     return exists && score >= minScore
 }
 
 // GetUserRank returns the user's position in the trust leaderboard
-func GetUserRank(addr std.Address) (int, int, bool) {
+func GetUserRank(addr address) (int, int, bool) {
     sortedUsers := GetSortedUsers()
 
     for i, userAddr := range sortedUsers {
@@ -491,20 +491,20 @@ func GetUserRank(addr std.Address) (int, int, bool) {
 }
 
 // GetTopTrustedUsers returns the N most trusted users
-func GetTopTrustedUsers(limit int) []std.Address {
+func GetTopTrustedUsers(limit int) []address {
     sortedUsers := GetSortedUsers()
 
     if limit > len(sortedUsers) {
         limit = len(sortedUsers)
     }
 
-    result := make([]std.Address, limit)
+    result := make([]address, limit)
     copy(result, sortedUsers[:limit])
     return result
 }
 
 // GetScoreFreshness returns how many days since the user's last score update
-func GetScoreFreshness(addr std.Address) (int64, bool) {
+func GetScoreFreshness(addr address) (int64, bool) {
     trust, exists := trustScores[addr]
     if !exists {
         return 0, false
@@ -521,14 +521,14 @@ func GetScoreFreshness(addr std.Address) (int64, bool) {
 
 // onlyOwner ensures only the contract owner can call admin functions
 func onlyOwner() {
-    caller := std.PreviousRealm().Address()
+    caller := runtime.OriginCaller()
     if caller != owner {
         panic("only owner can call this function")
     }
 }
 
 // RemoveUser removes a malicious user from the system (emergency function)
-func RemoveUser(target std.Address) {
+func RemoveUser(target address) {
     onlyOwner()
 
     delete(trustScores, target)
@@ -546,7 +546,7 @@ func RemoveUser(target std.Address) {
 }
 
 // TransferOwnership transfers contract ownership to a new address
-func TransferOwnership(newOwner std.Address) {
+func TransferOwnership(newOwner address) {
     onlyOwner()
     owner = newOwner
 }
@@ -556,8 +556,8 @@ func TransferOwnership(newOwner std.Address) {
 // =============================================================================
 
 // AddComment adds a comment to a user's profile
-func AddComment(_ realm, target std.Address, text string) {
-    caller := std.PreviousRealm().Address()
+func AddComment(cur realm, target address, text string) {
+    caller := runtime.OriginCaller()
 
     // Verify caller is registered
     if _, exists := trustScores[caller]; !exists {
@@ -595,7 +595,7 @@ func AddComment(_ realm, target std.Address, text string) {
 }
 
 // GetComments returns all comments for a user's profile
-func GetComments(target std.Address) []Comment {
+func GetComments(target address) []Comment {
     tree := userComments[target]
     if tree == nil {
         return []Comment{}
@@ -613,7 +613,7 @@ func GetComments(target std.Address) []Comment {
 }
 
 // GetCommentCount returns the number of comments for a user
-func GetCommentCount(target std.Address) int {
+func GetCommentCount(target address) int {
     tree := userComments[target]
     if tree == nil {
         return 0
