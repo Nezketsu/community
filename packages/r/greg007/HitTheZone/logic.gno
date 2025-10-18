@@ -1,4 +1,4 @@
-// Package hitthezone implements a provably fair gambling game on the Gno blockchain.
+// Package hitthezone implements a small gambling game on the Gno blockchain.
 //
 // Hit The Zone is a number guessing game where players bet on a range (min-max) within 1-100.
 // A random number is generated on-chain, and if it falls within the player's chosen range,
@@ -40,46 +40,6 @@ var (
 	ownerAddress     = runtime.OriginCaller()
 )
 
-// generateRandom generates a random number between 1 and 100 using entropy-based seeding.
-// The generated number is stored in the global lastRandomNumber variable.
-func generateRandom() {
-	counter++
-	seed1 := uint64(entropy.New().Seed())
-	seed2 := uint64(entropy.New().Seed())
-
-	r := rand.New(rand.NewPCG(seed1, seed2))
-	lastRandomNumber = r.IntN(100) + 1
-}
-
-// safeSendCoins safely sends coins to a recipient with error handling and event emission.
-// It returns true if the transfer was successful, false otherwise.
-// Failed transfers are logged via events and recovered from panics.
-func safeSendCoins(recipient address, amount int64) bool {
-	defer func() {
-		if r := recover(); r != nil {
-			chain.Emit("PaymentFailed",
-				"recipient", recipient.String(),
-				"amount", strconv.FormatInt(amount, 10),
-				"reason", "transaction_failed")
-		}
-	}()
-
-	if amount <= 0 {
-		return false
-	}
-
-	b := banker.NewBanker(banker.BankerTypeRealmSend)
-	coins := chain.NewCoins(chain.NewCoin("ugnot", amount))
-	b.SendCoins(runtime.CurrentRealm().Address(), recipient, coins)
-
-	chain.Emit("PaymentSent",
-		"recipient", recipient.String(),
-		"amount", strconv.FormatInt(amount, 10),
-		"timestamp", strconv.FormatInt(time.Now().Unix(), 10))
-
-	return true
-}
-
 // Game executes the main game logic for Hit The Zone.
 //
 // Players specify a min and max range (min-max), and a random number between 1-100 is generated.
@@ -117,110 +77,7 @@ func Game(cur realm, min int, max int) {
 	recordGame(caller, min, max, betAmount, actualWinAmount, multiplier, result)
 }
 
-// validateGameInputs validates all game inputs and returns the bet amount.
-// It checks that min >= 1, max <= 100, min < max, and bet amount >= 1 ugnot.
-// Panics if any validation fails.
-func validateGameInputs(min, max int) int64 {
-	if min < 1 {
-		panic("min must be >= 1")
-	}
-	if max > 100 {
-		panic("max must be <= 100")
-	}
-	if min >= max {
-		panic("min must be < max")
-	}
 
-	coins := banker.OriginSend()
-	betAmount := int64(0)
-	if len(coins) > 0 {
-		betAmount = coins[0].Amount
-	}
-
-	if betAmount < 1 {
-		panic("minimum bet is 1 ugnot")
-	}
-
-	return betAmount
-}
-
-// playGame generates a random number and checks if it falls within the player's range.
-// Returns true if the player won, false otherwise.
-func playGame(min, max int) bool {
-	generateRandom()
-	return lastRandomNumber >= min && lastRandomNumber <= max
-}
-
-// handlePayout handles all payout logic and returns the result message and actual payout amount.
-// If the player won, it attempts to pay winnings based on the multiplier.
-// If insufficient funds exist, it refunds the bet. All outcomes are logged via events.
-// Uses early returns to minimize gas costs.
-func handlePayout(won bool, betAmount int64, multiplier float64, caller address) (string, int64) {
-	if !won {
-		return "Lose", 0
-	}
-
-	currentBalance := GetRealmBalance()
-
-	if currentBalance < betAmount {
-		return "Win (House broke - no payout)", 0
-	}
-
-	winAmount := int64(float64(betAmount) * multiplier)
-
-	if currentBalance < winAmount {
-		safeSendCoins(caller, betAmount)
-		chain.Emit("GamePayout",
-			"player", caller.String(),
-			"type", "refund_insufficient_funds",
-			"bet_amount", strconv.FormatInt(betAmount, 10),
-			"refund_amount", strconv.FormatInt(betAmount, 10),
-			"required_amount", strconv.FormatInt(winAmount, 10))
-		return "Win (Insufficient funds - refunded)", betAmount
-	}
-
-	return handleWinPayout(caller, betAmount, winAmount, multiplier)
-}
-
-// handleWinPayout attempts to pay the full winnings to the player.
-// If payment fails, it refunds the bet instead.
-func handleWinPayout(caller address, betAmount, winAmount int64, multiplier float64) (string, int64) {
-	if !safeSendCoins(caller, winAmount) {
-		safeSendCoins(caller, betAmount)
-		chain.Emit("GamePayout",
-			"player", caller.String(),
-			"type", "refund_after_failed_payout",
-			"bet_amount", strconv.FormatInt(betAmount, 10),
-			"refund_amount", strconv.FormatInt(betAmount, 10))
-		return "Win (Payment failed - refunded)", betAmount
-	}
-
-	chain.Emit("GamePayout",
-		"player", caller.String(),
-		"type", "win_payout",
-		"bet_amount", strconv.FormatInt(betAmount, 10),
-		"win_amount", strconv.FormatInt(winAmount, 10),
-		"multiplier", strconv.FormatFloat(multiplier, 'f', 2, 64))
-	return "Win", winAmount
-}
-
-// recordGame records the game result in the game history.
-// History is stored in a FIFO queue that keeps the last 10 games.
-func recordGame(player address, min, max int, betAmount, winAmount int64, multiplier float64, result string) {
-	game := GameHistory{
-		Player:       player,
-		Min:          min,
-		Max:          max,
-		RandomNumber: lastRandomNumber,
-		Result:       result,
-		BetAmount:    betAmount,
-		WinAmount:    winAmount,
-		Multiplier:   multiplier,
-		Timestamp:    time.Now(),
-	}
-
-	gameHistory.Append(game)
-}
 
 // Donate allows users to send donations to the game owner.
 //
@@ -308,32 +165,6 @@ func GetGameHistory() []GameHistory {
 	return history
 }
 
-// calculateMultiplier calculates the payout multiplier based on the chosen range.
-//
-// The multiplier is inversely proportional to the range size: smaller ranges
-// offer higher multipliers, making single-number bets the most rewarding but riskiest.
-//
-// Formula: 100.0 / (max - min + 1)
-//
-// Examples:
-//   - Range 1-100 (full range): x1.00 multiplier
-//   - Range 1-50 (half range): x2.00 multiplier
-//   - Range 45-55 (11 numbers): x9.09 multiplier
-//   - Range 50-50 (single number): x100.00 multiplier
-//
-// Parameters:
-//   - min: Minimum value of the range
-//   - max: Maximum value of the range
-//
-// Returns: The calculated multiplier as float64, or 0.0 if range is invalid.
-func calculateMultiplier(min, max int) float64 {
-	if min < 0 || max > 100 || min > max {
-		return 0.0
-	}
-	rangeSize := max - min + 1
-	return 100.0 / float64(rangeSize)
-}
-
 // WithdrawAll allows the owner to withdraw all funds from the realm.
 //
 // This function transfers the entire realm balance to the owner's address.
@@ -365,4 +196,176 @@ func WithdrawAll(cur realm) {
 	if !success {
 		panic("withdrawal failed")
 	}
+}
+
+// calculateMultiplier calculates the payout multiplier based on the chosen range.
+//
+// The multiplier is inversely proportional to the range size: smaller ranges
+// offer higher multipliers, making single-number bets the most rewarding but riskiest.
+//
+// Formula: 100.0 / (max - min + 1)
+//
+// Examples:
+//   - Range 1-100 (full range): x1.00 multiplier
+//   - Range 1-50 (half range): x2.00 multiplier
+//   - Range 45-55 (11 numbers): x9.09 multiplier
+//   - Range 50-50 (single number): x100.00 multiplier
+//
+// Parameters:
+//   - min: Minimum value of the range
+//   - max: Maximum value of the range
+//
+// Returns: The calculated multiplier as float64, or 0.0 if range is invalid.
+func calculateMultiplier(min, max int) float64 {
+	if min < 0 || max > 100 || min > max {
+		return 0.0
+	}
+	rangeSize := max - min + 1
+	return 100.0 / float64(rangeSize)
+}
+
+
+// generateRandom generates a random number between 1 and 100 using entropy-based seeding.
+// The generated number is stored in the global lastRandomNumber variable.
+func generateRandom() {
+	counter++
+	seed1 := uint64(entropy.New().Seed())
+	seed2 := uint64(entropy.New().Seed())
+
+	r := rand.New(rand.NewPCG(seed1, seed2))
+	lastRandomNumber = r.IntN(100) + 1
+}
+
+// safeSendCoins safely sends coins to a recipient with error handling and event emission.
+// It returns true if the transfer was successful, false otherwise.
+// Failed transfers are logged via events and recovered from panics.
+func safeSendCoins(recipient address, amount int64) bool {
+	defer func() {
+		if r := recover(); r != nil {
+			chain.Emit("PaymentFailed",
+				"recipient", recipient.String(),
+				"amount", strconv.FormatInt(amount, 10),
+				"reason", "transaction_failed")
+		}
+	}()
+
+	if amount <= 0 {
+		return false
+	}
+
+	b := banker.NewBanker(banker.BankerTypeRealmSend)
+	coins := chain.NewCoins(chain.NewCoin("ugnot", amount))
+	b.SendCoins(runtime.CurrentRealm().Address(), recipient, coins)
+
+	chain.Emit("PaymentSent",
+		"recipient", recipient.String(),
+		"amount", strconv.FormatInt(amount, 10),
+		"timestamp", strconv.FormatInt(time.Now().Unix(), 10))
+
+	return true
+}
+
+// recordGame records the game result in the game history.
+// History is stored in a FIFO queue that keeps the last 10 games.
+func recordGame(player address, min, max int, betAmount, winAmount int64, multiplier float64, result string) {
+	game := GameHistory{
+		Player:       player,
+		Min:          min,
+		Max:          max,
+		RandomNumber: lastRandomNumber,
+		Result:       result,
+		BetAmount:    betAmount,
+		WinAmount:    winAmount,
+		Multiplier:   multiplier,
+		Timestamp:    time.Now(),
+	}
+
+	gameHistory.Append(game)
+}
+
+// validateGameInputs validates all game inputs and returns the bet amount.
+// It checks that min >= 1, max <= 100, min < max, and bet amount >= 1 ugnot.
+// Panics if any validation fails.
+func validateGameInputs(min, max int) int64 {
+	if min < 1 {
+		panic("min must be >= 1")
+	}
+	if max > 100 {
+		panic("max must be <= 100")
+	}
+	if min >= max {
+		panic("min must be < max")
+	}
+
+	coins := banker.OriginSend()
+	betAmount := int64(0)
+	if len(coins) > 0 {
+		betAmount = coins[0].Amount
+	}
+
+	if betAmount < 1 {
+		panic("minimum bet is 1 ugnot")
+	}
+
+	return betAmount
+}
+
+// playGame generates a random number and checks if it falls within the player's range.
+// Returns true if the player won, false otherwise.
+func playGame(min, max int) bool {
+	generateRandom()
+	return lastRandomNumber >= min && lastRandomNumber <= max
+}
+
+// handlePayout handles all payout logic and returns the result message and actual payout amount.
+// If the player won, it attempts to pay winnings based on the multiplier.
+// If insufficient funds exist, it refunds the bet. All outcomes are logged via events.
+// Uses early returns to minimize gas costs.
+func handlePayout(won bool, betAmount int64, multiplier float64, caller address) (string, int64) {
+	if !won {
+		return "Lose", 0
+	}
+
+	currentBalance := GetRealmBalance()
+
+	if currentBalance < betAmount {
+		return "Win (House broke - no payout)", 0
+	}
+
+	winAmount := int64(float64(betAmount) * multiplier)
+
+	if currentBalance < winAmount {
+		safeSendCoins(caller, betAmount)
+		chain.Emit("GamePayout",
+			"player", caller.String(),
+			"type", "refund_insufficient_funds",
+			"bet_amount", strconv.FormatInt(betAmount, 10),
+			"refund_amount", strconv.FormatInt(betAmount, 10),
+			"required_amount", strconv.FormatInt(winAmount, 10))
+		return "Win (Insufficient funds - refunded)", betAmount
+	}
+
+	return handleWinPayout(caller, betAmount, winAmount, multiplier)
+}
+
+// handleWinPayout attempts to pay the full winnings to the player.
+// If payment fails, it refunds the bet instead.
+func handleWinPayout(caller address, betAmount, winAmount int64, multiplier float64) (string, int64) {
+	if !safeSendCoins(caller, winAmount) {
+		safeSendCoins(caller, betAmount)
+		chain.Emit("GamePayout",
+			"player", caller.String(),
+			"type", "refund_after_failed_payout",
+			"bet_amount", strconv.FormatInt(betAmount, 10),
+			"refund_amount", strconv.FormatInt(betAmount, 10))
+		return "Win (Payment failed - refunded)", betAmount
+	}
+
+	chain.Emit("GamePayout",
+		"player", caller.String(),
+		"type", "win_payout",
+		"bet_amount", strconv.FormatInt(betAmount, 10),
+		"win_amount", strconv.FormatInt(winAmount, 10),
+		"multiplier", strconv.FormatFloat(multiplier, 'f', 2, 64))
+	return "Win", winAmount
 }
