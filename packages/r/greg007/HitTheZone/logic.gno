@@ -77,8 +77,6 @@ func Game(cur realm, min int, max int) {
 	recordGame(caller, min, max, betAmount, actualWinAmount, multiplier, result)
 }
 
-
-
 // Donate allows users to send donations to the game owner.
 //
 // The donated amount is transferred directly to the owner's address and tracked
@@ -223,7 +221,6 @@ func calculateMultiplier(min, max int) float64 {
 	rangeSize := max - min + 1
 	return 100.0 / float64(rangeSize)
 }
-
 
 // generateRandom generates a random number between 1 and 100 using entropy-based seeding.
 // The generated number is stored in the global lastRandomNumber variable.
