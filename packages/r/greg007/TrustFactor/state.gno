@@ -11,10 +11,10 @@ import (
 
 var (
 	// Main storage using AVL trees
-	trustScores  *avl.Tree // Main storage for user trust scores (key: address, value: *TrustScore)
-	userVotes    *avl.Tree // Tracks votes in "voter_target" format (key: string, value: bool)
-	voteHistory  *avl.Tree // Historical vote records per user (key: address, value: []VoteHistory)
-	userComments *avl.Tree // User comments storage using AVL tree (key: address, value: *avl.Tree)
+	trustScores  *avl.Tree        // Main storage for user trust scores (key: address, value: *TrustScore)
+	userVotes    *avl.Tree        // Tracks votes in "voter_target" format (key: string, value: bool)
+	voteHistory  *avl.Tree        // Historical vote records per user (key: address, value: []VoteHistory)
+	userComments *avl.Tree        // User comments storage using AVL tree (key: address, value: *avl.Tree)
 	owner        *ownable.Ownable // Contract ownership management
 
 	// Performance optimization cache
