@@ -1,5 +1,21 @@
 package trustfactor
 
+import "gno.land/p/nt/mux"
+
+// =============================================================================
+// ROUTER SETUP
+// =============================================================================
+
+var router *mux.Router
+
+func init() {
+	router = mux.NewRouter()
+
+	// Register routes
+	router.HandleFunc("", handleHome)
+	router.HandleFunc("{address}", handleUserProfile)
+}
+
 // =============================================================================
 // MAIN ENTRY POINT
 // =============================================================================
@@ -7,14 +23,21 @@ package trustfactor
 // Render handles all page routing and displays content based on the URL path
 // This is the main entry point for the TrustFactor realm
 func Render(path string) string {
-	searchParam := extractSearchParam(path)
-	if searchParam != "" {
-		return renderMainPageWithFilter(searchParam)
-	}
+	return router.Render(path)
+}
 
-	if path == "" {
-		return renderMainPageWithFilter("")
-	}
+// =============================================================================
+// ROUTE HANDLERS
+// =============================================================================
 
-	return renderUserProfile(path)
+// handleHome renders the main page with optional search filtering
+func handleHome(res *mux.ResponseWriter, req *mux.Request) {
+	searchQuery := req.Query.Get("search")
+	res.Write(renderMainPageWithFilter(searchQuery))
+}
+
+// handleUserProfile renders a specific user's profile page
+func handleUserProfile(res *mux.ResponseWriter, req *mux.Request) {
+	addr := req.GetVar("address")
+	res.Write(renderUserProfile(addr))
 }

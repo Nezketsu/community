@@ -3,18 +3,20 @@ package trustfactor
 import (
 	"testing"
 	"time"
+
+	"gno.land/p/nt/avl"
 )
 
 // TestUserRegistration tests the user registration functionality
 func TestUserRegistration(t *testing.T) {
 	// Reset state
-	trustScores = make(map[address]TrustScore)
+	trustScores = avl.NewTree()
 	totalUsers = 0
 
 	testAddr := address("g1user1234567890123456789012345678")
 
 	// Simulate registration
-	trustScores[testAddr] = TrustScore{
+	trustScores.Set(string(testAddr), &TrustScore{
 		Score:          5.0,
 		LastUpdate:     time.Now().Unix(),
 		Evaluator:      testAddr,
@@ -23,14 +25,15 @@ func TestUserRegistration(t *testing.T) {
 		NegativeVotes:  0,
 		VoterWeightSum: 0.0,
 		Confidence:     0.0,
-	}
+	})
 	totalUsers++
 
 	// Verify user is registered
-	trust, exists := trustScores[testAddr]
+	trustValue, exists := trustScores.Get(string(testAddr))
 	if !exists {
 		t.Fatal("User should be registered")
 	}
+	trust := trustValue.(*TrustScore)
 
 	if trust.Score != 5.0 {
 		t.Errorf("Expected initial score 5.0, got %.1f", trust.Score)
@@ -47,18 +50,18 @@ func TestUserRegistration(t *testing.T) {
 
 // TestDuplicateRegistration tests that duplicate registration is prevented
 func TestDuplicateRegistration(t *testing.T) {
-	trustScores = make(map[address]TrustScore)
+	trustScores = avl.NewTree()
 
 	testAddr := address("g1user1234567890123456789012345678")
 
 	// First registration
-	trustScores[testAddr] = TrustScore{
+	trustScores.Set(string(testAddr), &TrustScore{
 		Score:      5.0,
 		LastUpdate: time.Now().Unix(),
-	}
+	})
 
 	// Try to register again (should fail in real implementation)
-	_, alreadyExists := trustScores[testAddr]
+	alreadyExists := trustScores.Has(string(testAddr))
 	if !alreadyExists {
 		t.Error("Duplicate registration check should detect existing user")
 	}
@@ -66,56 +69,58 @@ func TestDuplicateRegistration(t *testing.T) {
 
 // TestUpvoteBasicFunctionality tests upvoting a user
 func TestUpvoteBasicFunctionality(t *testing.T) {
-	trustScores = make(map[address]TrustScore)
-	userVotes = make(map[string]bool)
-	voteHistory = make(map[address][]VoteHistory)
+	trustScores = avl.NewTree()
+	userVotes = avl.NewTree()
+	voteHistory = avl.NewTree()
 
 	voterAddr := address("g1voter123456789012345678901234567")
 	targetAddr := address("g1target12345678901234567890123456")
 
 	// Register both users
-	trustScores[voterAddr] = TrustScore{
+	trustScores.Set(string(voterAddr), &TrustScore{
 		Score:      7.0,
 		LastUpdate: time.Now().Unix(),
-	}
+	})
 
-	trustScores[targetAddr] = TrustScore{
+	trustScores.Set(string(targetAddr), &TrustScore{
 		Score:          5.0,
 		LastUpdate:     time.Now().Unix(),
 		TotalVotes:     0,
 		PositiveVotes:  0,
 		VoterWeightSum: 0.0,
-	}
+	})
 
 	// Simulate upvote
 	voteKey := string(voterAddr) + "_" + string(targetAddr)
-	if userVotes[voteKey] {
+	if voted, _ := userVotes.Get(voteKey); voted != nil && voted.(bool) {
 		t.Fatal("Should allow first vote")
 	}
 
-	voterWeight := calculateCompositeScore(trustScores[voterAddr])
+	voterValue, _ := trustScores.Get(string(voterAddr))
+	voterWeight := calculateCompositeScore(*voterValue.(*TrustScore))
 	impact := (voterWeight / 10.0) * 0.3
 	if impact < 0.05 {
 		impact = 0.05
 	}
 
-	newScore := trustScores[targetAddr].Score + impact
+	targetValue, _ := trustScores.Get(string(targetAddr))
+	targetTrust := targetValue.(*TrustScore)
+	newScore := targetTrust.Score + impact
 
-	trustScores[targetAddr] = TrustScore{
-		Score:          newScore,
-		LastUpdate:     time.Now().Unix(),
-		Evaluator:      voterAddr,
-		TotalVotes:     1,
-		PositiveVotes:  1,
-		NegativeVotes:  0,
-		VoterWeightSum: voterWeight,
-		Confidence:     calculateConfidence(1, voterWeight, 1),
-	}
+	// Direct modification with pointers
+	targetTrust.Score = newScore
+	targetTrust.LastUpdate = time.Now().Unix()
+	targetTrust.Evaluator = voterAddr
+	targetTrust.TotalVotes = 1
+	targetTrust.PositiveVotes = 1
+	targetTrust.VoterWeightSum = voterWeight
+	targetTrust.Confidence = calculateConfidence(1, voterWeight, 1)
 
-	userVotes[voteKey] = true
+	userVotes.Set(voteKey, true)
 
 	// Verify vote was recorded
-	trust := trustScores[targetAddr]
+	trustValue, _ := trustScores.Get(string(targetAddr))
+	trust := trustValue.(*TrustScore)
 	if trust.TotalVotes != 1 {
 		t.Errorf("Expected 1 vote, got %d", trust.TotalVotes)
 	}
@@ -128,62 +133,64 @@ func TestUpvoteBasicFunctionality(t *testing.T) {
 		t.Errorf("Score should increase after upvote, got %.2f", trust.Score)
 	}
 
-	if !userVotes[voteKey] {
-		t.Error("Vote should be recorded in userVotes map")
+	if voted, _ := userVotes.Get(voteKey); voted == nil || !voted.(bool) {
+		t.Error("Vote should be recorded in userVotes tree")
 	}
 }
 
 // TestDownvoteBasicFunctionality tests downvoting a user
 func TestDownvoteBasicFunctionality(t *testing.T) {
-	trustScores = make(map[address]TrustScore)
-	userVotes = make(map[string]bool)
+	trustScores = avl.NewTree()
+	userVotes = avl.NewTree()
 
 	voterAddr := address("g1voter123456789012345678901234567")
 	targetAddr := address("g1target12345678901234567890123456")
 
 	// Register both users
-	trustScores[voterAddr] = TrustScore{
+	trustScores.Set(string(voterAddr), &TrustScore{
 		Score:      7.0,
 		LastUpdate: time.Now().Unix(),
-	}
+	})
 
-	trustScores[targetAddr] = TrustScore{
+	trustScores.Set(string(targetAddr), &TrustScore{
 		Score:          5.0,
 		LastUpdate:     time.Now().Unix(),
 		TotalVotes:     0,
 		NegativeVotes:  0,
 		VoterWeightSum: 0.0,
-	}
+	})
 
 	// Simulate downvote
 	voteKey := string(voterAddr) + "_" + string(targetAddr)
 
-	voterWeight := calculateCompositeScore(trustScores[voterAddr])
+	voterValue, _ := trustScores.Get(string(voterAddr))
+	voterWeight := calculateCompositeScore(*voterValue.(*TrustScore))
 	impact := (voterWeight / 10.0) * 0.3
 	if impact < 0.05 {
 		impact = 0.05
 	}
 
-	newScore := trustScores[targetAddr].Score - impact
+	targetValue, _ := trustScores.Get(string(targetAddr))
+	targetTrust := targetValue.(*TrustScore)
+	newScore := targetTrust.Score - impact
 	if newScore < 0.0 {
 		newScore = 0.0
 	}
 
-	trustScores[targetAddr] = TrustScore{
-		Score:          newScore,
-		LastUpdate:     time.Now().Unix(),
-		Evaluator:      voterAddr,
-		TotalVotes:     1,
-		PositiveVotes:  0,
-		NegativeVotes:  1,
-		VoterWeightSum: voterWeight,
-		Confidence:     calculateConfidence(1, voterWeight, 0),
-	}
+	// Direct modification with pointers
+	targetTrust.Score = newScore
+	targetTrust.LastUpdate = time.Now().Unix()
+	targetTrust.Evaluator = voterAddr
+	targetTrust.TotalVotes = 1
+	targetTrust.NegativeVotes = 1
+	targetTrust.VoterWeightSum = voterWeight
+	targetTrust.Confidence = calculateConfidence(1, voterWeight, 0)
 
-	userVotes[voteKey] = true
+	userVotes.Set(voteKey, true)
 
 	// Verify downvote was recorded
-	trust := trustScores[targetAddr]
+	trustValue, _ := trustScores.Get(string(targetAddr))
+	trust := trustValue.(*TrustScore)
 	if trust.TotalVotes != 1 {
 		t.Errorf("Expected 1 vote, got %d", trust.TotalVotes)
 	}
@@ -199,30 +206,30 @@ func TestDownvoteBasicFunctionality(t *testing.T) {
 
 // TestPreventDuplicateVote tests that duplicate voting is prevented
 func TestPreventDuplicateVote(t *testing.T) {
-	trustScores = make(map[address]TrustScore)
-	userVotes = make(map[string]bool)
+	trustScores = avl.NewTree()
+	userVotes = avl.NewTree()
 
 	voterAddr := address("g1voter123456789012345678901234567")
 	targetAddr := address("g1target12345678901234567890123456")
 
-	trustScores[voterAddr] = TrustScore{Score: 7.0, LastUpdate: time.Now().Unix()}
-	trustScores[targetAddr] = TrustScore{Score: 5.0, LastUpdate: time.Now().Unix()}
+	trustScores.Set(string(voterAddr), &TrustScore{Score: 7.0, LastUpdate: time.Now().Unix()})
+	trustScores.Set(string(targetAddr), &TrustScore{Score: 5.0, LastUpdate: time.Now().Unix()})
 
 	voteKey := string(voterAddr) + "_" + string(targetAddr)
-	userVotes[voteKey] = true
+	userVotes.Set(voteKey, true)
 
 	// Try to vote again
-	if !userVotes[voteKey] {
+	if voted, _ := userVotes.Get(voteKey); voted == nil || !voted.(bool) {
 		t.Error("Should detect duplicate vote")
 	}
 }
 
 // TestPreventSelfVote tests that self-voting is prevented
 func TestPreventSelfVote(t *testing.T) {
-	trustScores = make(map[address]TrustScore)
+	trustScores = avl.NewTree()
 
 	userAddr := address("g1user1234567890123456789012345678")
-	trustScores[userAddr] = TrustScore{Score: 5.0, LastUpdate: time.Now().Unix()}
+	trustScores.Set(string(userAddr), &TrustScore{Score: 5.0, LastUpdate: time.Now().Unix()})
 
 	// Check self-vote prevention
 	if userAddr == userAddr {
@@ -234,15 +241,15 @@ func TestPreventSelfVote(t *testing.T) {
 
 // TestGetTrustScore tests retrieving trust scores
 func TestGetTrustScore(t *testing.T) {
-	trustScores = make(map[address]TrustScore)
+	trustScores = avl.NewTree()
 
 	testAddr := address("g1test123456789012345678901234567890")
 	expectedScore := 7.5
 
-	trustScores[testAddr] = TrustScore{
+	trustScores.Set(string(testAddr), &TrustScore{
 		Score:      expectedScore,
 		LastUpdate: time.Now().Unix(),
-	}
+	})
 
 	// Test GetTrustScore
 	score, exists := GetTrustScore(testAddr)
@@ -264,10 +271,10 @@ func TestGetTrustScore(t *testing.T) {
 
 // TestGetTrustDetails tests retrieving complete trust details
 func TestGetTrustDetails(t *testing.T) {
-	trustScores = make(map[address]TrustScore)
+	trustScores = avl.NewTree()
 
 	testAddr := address("g1test123456789012345678901234567890")
-	expectedTrust := TrustScore{
+	expectedTrust := &TrustScore{
 		Score:          8.5,
 		LastUpdate:     time.Now().Unix(),
 		TotalVotes:     10,
@@ -277,7 +284,7 @@ func TestGetTrustDetails(t *testing.T) {
 		Confidence:     0.65,
 	}
 
-	trustScores[testAddr] = expectedTrust
+	trustScores.Set(string(testAddr), expectedTrust)
 
 	// Test GetTrustDetails
 	trust := GetTrustDetails(testAddr)
@@ -301,13 +308,13 @@ func TestGetTrustDetails(t *testing.T) {
 
 // TestQueryTrustScore tests the public API for external realms
 func TestQueryTrustScore(t *testing.T) {
-	trustScores = make(map[address]TrustScore)
+	trustScores = avl.NewTree()
 
 	testAddr := address("g1test123456789012345678901234567890")
-	trustScores[testAddr] = TrustScore{
+	trustScores.Set(string(testAddr), &TrustScore{
 		Score:      7.0,
 		LastUpdate: time.Now().Unix(),
-	}
+	})
 
 	score, exists := QueryTrustScore(testAddr)
 	if !exists {
@@ -321,16 +328,16 @@ func TestQueryTrustScore(t *testing.T) {
 
 // TestQueryUserDetails tests retrieving comprehensive user details
 func TestQueryUserDetails(t *testing.T) {
-	trustScores = make(map[address]TrustScore)
+	trustScores = avl.NewTree()
 
 	testAddr := address("g1test123456789012345678901234567890")
-	trustScores[testAddr] = TrustScore{
+	trustScores.Set(string(testAddr), &TrustScore{
 		Score:          8.0,
 		LastUpdate:     time.Now().Unix(),
 		TotalVotes:     15,
 		PositiveVotes:  12,
 		VoterWeightSum: 100.0,
-	}
+	})
 
 	compositeScore, totalVotes, confidence, exists := QueryUserDetails(testAddr)
 
@@ -353,13 +360,13 @@ func TestQueryUserDetails(t *testing.T) {
 
 // TestIsTrustedUser tests the trust threshold check
 func TestIsTrustedUser(t *testing.T) {
-	trustScores = make(map[address]TrustScore)
+	trustScores = avl.NewTree()
 
 	testAddr := address("g1test123456789012345678901234567890")
-	trustScores[testAddr] = TrustScore{
+	trustScores.Set(string(testAddr), &TrustScore{
 		Score:      7.0,
 		LastUpdate: time.Now().Unix(),
-	}
+	})
 
 	// Get the actual composite score first
 	compositeScore, _ := QueryTrustScore(testAddr)
@@ -385,14 +392,14 @@ func TestIsTrustedUser(t *testing.T) {
 
 // TestVoteHistory tests vote history tracking
 func TestVoteHistory(t *testing.T) {
-	voteHistory = make(map[address][]VoteHistory)
+	voteHistory = avl.NewTree()
 
 	targetAddr := address("g1target12345678901234567890123456")
 	voterAddr1 := address("g1voter1234567890123456789012345671")
 	voterAddr2 := address("g1voter1234567890123456789012345672")
 
 	// Add vote history entries
-	voteHistory[targetAddr] = []VoteHistory{
+	voteHistory.Set(string(targetAddr), []VoteHistory{
 		{
 			Voter:     voterAddr1,
 			VoteType:  "upvote",
@@ -405,7 +412,7 @@ func TestVoteHistory(t *testing.T) {
 			Weight:    6.0,
 			Timestamp: time.Now().Unix(),
 		},
-	}
+	})
 
 	// Get vote history
 	history := GetVoteHistory(targetAddr)
@@ -465,15 +472,15 @@ func TestScoreBounds(t *testing.T) {
 
 // TestGetAllUsers tests retrieving all registered users
 func TestGetAllUsers(t *testing.T) {
-	trustScores = make(map[address]TrustScore)
+	trustScores = avl.NewTree()
 
 	addr1 := address("g1user1234567890123456789012345678")
 	addr2 := address("g1user2345678901234567890123456789")
 	addr3 := address("g1user3456789012345678901234567890")
 
-	trustScores[addr1] = TrustScore{Score: 5.0, LastUpdate: time.Now().Unix()}
-	trustScores[addr2] = TrustScore{Score: 6.0, LastUpdate: time.Now().Unix()}
-	trustScores[addr3] = TrustScore{Score: 7.0, LastUpdate: time.Now().Unix()}
+	trustScores.Set(string(addr1), &TrustScore{Score: 5.0, LastUpdate: time.Now().Unix()})
+	trustScores.Set(string(addr2), &TrustScore{Score: 6.0, LastUpdate: time.Now().Unix()})
+	trustScores.Set(string(addr3), &TrustScore{Score: 7.0, LastUpdate: time.Now().Unix()})
 
 	allUsers := GetAllUsers()
 
@@ -496,51 +503,54 @@ func TestGetAllUsers(t *testing.T) {
 
 // TestMultipleVotesImpact tests the cumulative effect of multiple votes
 func TestMultipleVotesImpact(t *testing.T) {
-	trustScores = make(map[address]TrustScore)
-	userVotes = make(map[string]bool)
+	trustScores = avl.NewTree()
+	userVotes = avl.NewTree()
 
 	targetAddr := address("g1target12345678901234567890123456")
-	trustScores[targetAddr] = TrustScore{
+	trustScores.Set(string(targetAddr), &TrustScore{
 		Score:      5.0,
 		LastUpdate: time.Now().Unix(),
-	}
+	})
 
-	initialScore := trustScores[targetAddr].Score
+	targetValue, _ := trustScores.Get(string(targetAddr))
+	initialScore := targetValue.(*TrustScore).Score
 
 	// Simulate 3 upvotes from different users
 	for i := 0; i < 3; i++ {
 		voterAddr := address("g1voter" + string(rune('1'+i)) + "2345678901234567890123456")
-		trustScores[voterAddr] = TrustScore{Score: 7.0, LastUpdate: time.Now().Unix()}
+		trustScores.Set(string(voterAddr), &TrustScore{Score: 7.0, LastUpdate: time.Now().Unix()})
 
 		voteKey := string(voterAddr) + "_" + string(targetAddr)
-		if userVotes[voteKey] {
+		if voted, _ := userVotes.Get(voteKey); voted != nil && voted.(bool) {
 			continue
 		}
 
-		voterWeight := calculateCompositeScore(trustScores[voterAddr])
+		voterValue, _ := trustScores.Get(string(voterAddr))
+		voterWeight := calculateCompositeScore(*voterValue.(*TrustScore))
 		impact := (voterWeight / 10.0) * 0.3
 		if impact < 0.05 {
 			impact = 0.05
 		}
 
-		currentTrust := trustScores[targetAddr]
+		currentValue, _ := trustScores.Get(string(targetAddr))
+		currentTrust := currentValue.(*TrustScore)
 		newScore := currentTrust.Score + impact
 		if newScore > 10.0 {
 			newScore = 10.0
 		}
 
-		trustScores[targetAddr] = TrustScore{
-			Score:          newScore,
-			LastUpdate:     time.Now().Unix(),
-			TotalVotes:     currentTrust.TotalVotes + 1,
-			PositiveVotes:  currentTrust.PositiveVotes + 1,
-			VoterWeightSum: currentTrust.VoterWeightSum + voterWeight,
-		}
+		// Direct modification with pointers
+		currentTrust.Score = newScore
+		currentTrust.LastUpdate = time.Now().Unix()
+		currentTrust.TotalVotes++
+		currentTrust.PositiveVotes++
+		currentTrust.VoterWeightSum += voterWeight
 
-		userVotes[voteKey] = true
+		userVotes.Set(voteKey, true)
 	}
 
-	finalTrust := trustScores[targetAddr]
+	finalValue, _ := trustScores.Get(string(targetAddr))
+	finalTrust := finalValue.(*TrustScore)
 
 	if finalTrust.Score <= initialScore {
 		t.Errorf("Score should increase after upvotes: initial=%.2f, final=%.2f",

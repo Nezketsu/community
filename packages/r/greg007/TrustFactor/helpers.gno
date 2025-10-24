@@ -41,10 +41,7 @@ func getDisplayName(addr address) string {
 	userData := users.ResolveAddress(addr)
 
 	if userData != nil {
-		name := userData.Name()
-		if name != "" {
-			return name
-		}
+		return userData.Name()
 	}
 
 	return shortenAddress(string(addr), 12, 4)
