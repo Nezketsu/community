@@ -52,10 +52,12 @@ func ApplyForBounty(_ realm, bountyID uint64, prLink string) uint64 {
 	daoDesc := ufmt.Sprintf("Private DAO to review application for bounty #%d", bountyID)
 
 	// Create DAO with selected validators as members
+	// DisableVotingDeadlineCheck allows immediate execution after votes
 	dao := commondao.New(
 		commondao.WithID(applicationCount),
 		commondao.WithName(daoName),
 		commondao.WithDescription(daoDesc),
+		commondao.DisableVotingDeadlineCheck(),
 	)
 
 	// Add selected validators as members
@@ -135,6 +137,22 @@ func Vote(_ realm, applicationID uint64, vote string) {
 	err := app.DAO.Vote(caller, app.ProposalID, voteChoice, "")
 	if err != nil {
 		panic(err)
+	}
+
+	// Try to execute the proposal
+	// Tally() will return true when all validators have voted
+	// Execute() will handle both approval and rejection
+	proposal = app.DAO.ActiveProposals().Get(app.ProposalID)
+	if proposal != nil {
+		totalMembers := app.DAO.Members().Size()
+		totalVotes := proposal.VotingRecord().Size()
+
+		// If all validators have voted, execute to finalize
+		if totalVotes == totalMembers {
+			err = app.DAO.Execute(app.ProposalID)
+			// Ignore errors - proposal might already be executed or failed
+			// The status will be updated in Execute() regardless
+		}
 	}
 }
 

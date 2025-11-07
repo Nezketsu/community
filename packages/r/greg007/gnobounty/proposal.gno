@@ -47,28 +47,28 @@ func (p *ClaimBountyProposal) VotingPeriod() time.Duration {
 	return 7 * 24 * time.Hour
 }
 
-// Tally counts votes and determines if proposal passes
-// Requires all 3 validators to vote YES for approval
+// Tally counts votes and determines if proposal is ready to execute
+// Returns true when all validators have voted (regardless of outcome)
 func (p *ClaimBountyProposal) Tally(votes commondao.ReadonlyVotingRecord, members commondao.MemberSet) (bool, error) {
 	totalMembers := members.Size()
 	if totalMembers == 0 {
 		return false, ufmt.Errorf("no members in DAO")
 	}
 
-	// Count votes using the VoteCount method
-	yesCount := votes.VoteCount(commondao.ChoiceYes)
-	noCount := votes.VoteCount(commondao.ChoiceNo)
+	totalVotes := votes.Size()
 
-	// Require 100% approval: all validators must vote YES
-	// For a 3-validator DAO, we need exactly 3 YES votes
-	if yesCount == totalMembers && noCount == 0 {
+	// Return true when all validators have voted
+	// This allows Execute to be called and handle approval/rejection
+	if totalVotes == totalMembers {
 		return true, nil
 	}
 
+	// Not ready yet - waiting for more votes
 	return false, nil
 }
 
-// Execute executes the proposal after approval
+// Execute executes the proposal after all votes are in
+// Determines approval or rejection based on vote counts
 func (p *ClaimBountyProposal) Execute(_ realm) error {
 	app := GetApplication(p.ApplicationID)
 	if app == nil {
@@ -84,19 +84,34 @@ func (p *ClaimBountyProposal) Execute(_ realm) error {
 		return ufmt.Errorf("bounty already claimed")
 	}
 
-	// Mark application as approved
-	app.Status = StatusApproved
+	// Get vote counts from the DAO proposal
+	proposal := app.DAO.ActiveProposals().Get(app.ProposalID)
+	if proposal == nil {
+		return ufmt.Errorf("proposal not found")
+	}
 
-	// Mark bounty as claimed
-	bounty.IsClaimed = true
-	bounty.Claimer = p.Applicant
-	bounty.ClaimedAt = time.Now()
+	yesCount := proposal.VotingRecord().VoteCount(commondao.ChoiceYes)
+	noCount := proposal.VotingRecord().VoteCount(commondao.ChoiceNo)
+	totalMembers := app.DAO.Members().Size()
 
-	// Transfer bounty amount to applicant
-	bnk := banker.NewBanker(banker.BankerTypeRealmSend)
-	send := chain.Coins{chain.Coin{Denom: "ugnot", Amount: bounty.Amount}}
-	pkgAddr := chain.PackageAddress("gno.land/r/greg007/gnobounty")
-	bnk.SendCoins(pkgAddr, p.Applicant, send)
+	// Check if unanimous approval (all YES, no NO)
+	if yesCount == totalMembers && noCount == 0 {
+		// Approve and transfer funds
+		app.Status = StatusApproved
+
+		bounty.IsClaimed = true
+		bounty.Claimer = p.Applicant
+		bounty.ClaimedAt = time.Now()
+
+		// Transfer bounty amount to applicant
+		bnk := banker.NewBanker(banker.BankerTypeRealmSend)
+		send := chain.Coins{chain.Coin{Denom: "ugnot", Amount: bounty.Amount}}
+		pkgAddr := chain.PackageAddress("gno.land/r/greg007/gnobounty")
+		bnk.SendCoins(pkgAddr, p.Applicant, send)
+	} else {
+		// Reject - not unanimous
+		app.Status = StatusRejected
+	}
 
 	return nil
 }

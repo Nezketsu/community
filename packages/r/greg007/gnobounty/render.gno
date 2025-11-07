@@ -137,7 +137,51 @@ func renderApplication(app *Application) string {
 	// Show DAO voting information if DAO exists
 	if app.DAO != nil {
 		output += ufmt.Sprintf("- Proposal ID: %d\n", app.ProposalID)
-		output += ufmt.Sprintf("- Validators: %d assigned\n", app.DAO.Members().Size())
+
+		// Get proposal and show detailed validator voting status
+		proposal := app.DAO.ActiveProposals().Get(app.ProposalID)
+		if proposal != nil {
+			// Get vote counts
+			yesCount := proposal.VotingRecord().VoteCount(commondao.ChoiceYes)
+			noCount := proposal.VotingRecord().VoteCount(commondao.ChoiceNo)
+			abstainCount := proposal.VotingRecord().VoteCount(commondao.ChoiceAbstain)
+			totalVotes := proposal.VotingRecord().Size()
+			totalMembers := app.DAO.Members().Size()
+
+			output += ufmt.Sprintf("\n**Voting Progress:** %d/%d validators have voted\n", totalVotes, totalMembers)
+			output += ufmt.Sprintf("- ✅ YES: %d\n", yesCount)
+			output += ufmt.Sprintf("- ❌ NO: %d\n", noCount)
+			output += ufmt.Sprintf("- 🤷 ABSTAIN: %d\n", abstainCount)
+			output += ufmt.Sprintf("- ⏳ PENDING: %d\n", totalMembers-totalVotes)
+		}
+	}
+
+	// Add vote buttons for validators if application is still pending
+	if app.Status == StatusPending && app.DAO != nil {
+		output += "\n**Vote on this application:**\n"
+
+		// Add vote buttons (yes/no/abstain)
+		yesLink := txlink.NewLink("Vote").
+			AddArgs(
+				"applicationID", ufmt.Sprintf("%d", app.ID),
+				"vote", "yes",
+			).
+			URL()
+		noLink := txlink.NewLink("Vote").
+			AddArgs(
+				"applicationID", ufmt.Sprintf("%d", app.ID),
+				"vote", "no",
+			).
+			URL()
+		abstainLink := txlink.NewLink("Vote").
+			AddArgs(
+				"applicationID", ufmt.Sprintf("%d", app.ID),
+				"vote", "abstain",
+			).
+			URL()
+
+		output += md.Link("✅ Approve", yesLink) + " | " + md.Link("❌ Reject", noLink) + " | " + md.Link("🤷 Abstain", abstainLink) + "\n"
+		output += "\n_Note: Only assigned validators can vote on this application._\n"
 	}
 	output += "\n"
 
