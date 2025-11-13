@@ -1,8 +1,8 @@
 package trustfactor
 
 import (
-	"time"
 	"chain/runtime"
+	"time"
 
 	"gno.land/p/nt/avl"
 )
