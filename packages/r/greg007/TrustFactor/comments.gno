@@ -2,7 +2,6 @@ package trustfactor
 
 import (
 	"time"
-
 	"chain/runtime"
 
 	"gno.land/p/nt/avl"
@@ -64,7 +63,7 @@ func GetComments(target address) []Comment {
 	tree := treeValue.(*avl.Tree)
 
 	comments := make([]Comment, 0)
-	tree.ReverseIterate("", "", func(key string, value interface{}) bool {
+	tree.ReverseIterate("", "", func(key string, value any) bool {
 		if comment, ok := value.(Comment); ok {
 			comments = append(comments, comment)
 		}

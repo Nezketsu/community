@@ -37,14 +37,9 @@ func GetTrustDetails(addr address) TrustScore {
 // DATA ACCESS FUNCTIONS
 // =============================================================================
 
-// GetAllUsers returns the complete trust scores map (used internally)
-func GetAllUsers() map[address]TrustScore {
-	result := make(map[address]TrustScore)
-	trustScores.Iterate("", "", func(key string, value interface{}) bool {
-		result[address(key)] = *value.(*TrustScore)
-		return false
-	})
-	return result
+// GetTotalUsers returns the total number of registered users
+func GetTotalUsers() int {
+	return totalUsers
 }
 
 // GetVoteHistory returns the voting history for a specific user

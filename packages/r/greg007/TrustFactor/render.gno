@@ -2,7 +2,6 @@ package trustfactor
 
 import (
 	"strconv"
-	"strings"
 
 	"gno.land/p/leon/svgbtn"
 	"gno.land/p/moul/md"
@@ -44,8 +43,9 @@ func renderMainPageWithFilter(filter string) string {
 	}) + "\n"
 
 	var topUsers []address
-	allUsers := GetAllUsers()
-	for addr, trust := range allUsers {
+	sortedUsers := GetSortedUsers()
+	for _, addr := range sortedUsers {
+		trust := GetTrustDetails(addr)
 		if trust.TotalVotes >= 3 {
 			topUsers = append(topUsers, addr)
 			if len(topUsers) >= 5 {
@@ -238,19 +238,14 @@ func renderSearchResults(query string) string {
 	}
 
 	addr := address(query)
-	if _, exists := GetAllUsers()[addr]; exists {
+	if _, exists := trustScores.Get(string(addr)); exists {
 		return renderUserProfile(string(addr))
 	}
 
 	result := md.H1("🔍 Search results for: " + md.InlineCode(query))
 
-	var matches []address
-	for addr := range GetAllUsers() {
-		addrStr := string(addr)
-		if len(query) >= 4 && strings.Contains(addrStr, query) {
-			matches = append(matches, addr)
-		}
-	}
+	// Use FilterUsers to get matches (already sorted by score)
+	matches, _ := FilterUsers(query, 100, 0) // Get up to 100 matches
 
 	matchCount := len(matches)
 

@@ -470,9 +470,10 @@ func TestScoreBounds(t *testing.T) {
 	}
 }
 
-// TestGetAllUsers tests retrieving all registered users
-func TestGetAllUsers(t *testing.T) {
+// TestGetTotalUsers tests retrieving total user count
+func TestGetTotalUsers(t *testing.T) {
 	trustScores = avl.NewTree()
+	totalUsers = 0
 
 	addr1 := address("g1user1234567890123456789012345678")
 	addr2 := address("g1user2345678901234567890123456789")
@@ -481,23 +482,25 @@ func TestGetAllUsers(t *testing.T) {
 	trustScores.Set(string(addr1), &TrustScore{Score: 5.0, LastUpdate: time.Now().Unix()})
 	trustScores.Set(string(addr2), &TrustScore{Score: 6.0, LastUpdate: time.Now().Unix()})
 	trustScores.Set(string(addr3), &TrustScore{Score: 7.0, LastUpdate: time.Now().Unix()})
+	totalUsers = 3
 
-	allUsers := GetAllUsers()
+	count := GetTotalUsers()
 
-	if len(allUsers) != 3 {
-		t.Errorf("Expected 3 users, got %d", len(allUsers))
+	if count != 3 {
+		t.Errorf("Expected 3 users, got %d", count)
 	}
 
-	if _, exists := allUsers[addr1]; !exists {
-		t.Error("addr1 should exist in all users")
+	// Verify users exist using GetTrustDetails
+	if trust := GetTrustDetails(addr1); trust.Score == 0 {
+		t.Error("addr1 should exist")
 	}
 
-	if _, exists := allUsers[addr2]; !exists {
-		t.Error("addr2 should exist in all users")
+	if trust := GetTrustDetails(addr2); trust.Score == 0 {
+		t.Error("addr2 should exist")
 	}
 
-	if _, exists := allUsers[addr3]; !exists {
-		t.Error("addr3 should exist in all users")
+	if trust := GetTrustDetails(addr3); trust.Score == 0 {
+		t.Error("addr3 should exist")
 	}
 }
 

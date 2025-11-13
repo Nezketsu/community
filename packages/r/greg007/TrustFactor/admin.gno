@@ -1,13 +1,17 @@
 package trustfactor
 
-import "strings"
+import (
+	"strings"
+
+	"gno.land/p/nt/ownable"
+)
 
 // =============================================================================
 // ADMIN FUNCTIONS (OWNER ONLY)
 // =============================================================================
 
 // RemoveUser removes a malicious user from the system (emergency function)
-func RemoveUser(target address) {
+func RemoveUser(cur realm, target address) {
 	owner.AssertOwnedByCurrent()
 
 	trustScores.Remove(string(target))
@@ -29,17 +33,7 @@ func RemoveUser(target address) {
 	invalidateCache()
 }
 
-// TransferOwnership transfers contract ownership to a new address
-func TransferOwnership(newOwner address) error {
-	return owner.TransferOwnership(newOwner)
-}
-
-// DropOwnership removes the owner, effectively disabling all admin functions
-func DropOwnership() error {
-	return owner.DropOwnershipByCurrent()
-}
-
-// Owner returns the current owner address
-func Owner() address {
-	return owner.Owner()
+// GetOwnable returns the ownable object for ownership management
+func GetOwnable() *ownable.Ownable {
+	return owner
 }

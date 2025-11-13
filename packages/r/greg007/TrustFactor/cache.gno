@@ -1,6 +1,9 @@
 package trustfactor
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // =============================================================================
 // PERFORMANCE OPTIMIZATION - CACHING & SORTING
@@ -116,26 +119,7 @@ func FilterUsers(searchTerm string, limit int, offset int) ([]address, int) {
 
 // containsSubstring checks if a string contains a substring (case-sensitive)
 func containsSubstring(str, substr string) bool {
-	if len(substr) == 0 {
-		return true
-	}
-	if len(substr) > len(str) {
-		return false
-	}
-
-	for i := 0; i <= len(str)-len(substr); i++ {
-		match := true
-		for j := 0; j < len(substr); j++ {
-			if str[i+j] != substr[j] {
-				match = false
-				break
-			}
-		}
-		if match {
-			return true
-		}
-	}
-	return false
+	return strings.Index(str, substr) >= 0
 }
 
 // GetPerformanceStats returns cache and performance statistics
