@@ -17,6 +17,9 @@ var (
 	validatorList    []address     // List of validator addresses for random selection
 	validatorsPerDAO int       = 3 // Number of validators per DAO vote
 	requiredVotes    int       = 3 // Number of approvals needed (3/3)
+
+	// Validator reward percentage (5% of bounty split among validators)
+	validatorRewardPercent int64 = 5 // 5% of bounty goes to validators
 )
 
 // GetBounty returns a bounty by ID

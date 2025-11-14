@@ -103,11 +103,27 @@ func (p *ClaimBountyProposal) Execute(_ realm) error {
 		bounty.Claimer = p.Applicant
 		bounty.ClaimedAt = time.Now()
 
-		// Transfer bounty amount to applicant
+		// Calculate reward split: 5% to validators, 95% to applicant
+		validatorReward := (bounty.Amount * validatorRewardPercent) / 100
+		applicantReward := bounty.Amount - validatorReward
+
+		// Split validator reward equally among all validators who voted
+		rewardPerValidator := validatorReward / int64(totalMembers)
+
+		// Transfer rewards
 		bnk := banker.NewBanker(banker.BankerTypeRealmSend)
-		send := chain.Coins{chain.Coin{Denom: "ugnot", Amount: bounty.Amount}}
 		pkgAddr := chain.PackageAddress("gno.land/r/greg007/gnobounty")
-		bnk.SendCoins(pkgAddr, p.Applicant, send)
+
+		// Pay each validator their share
+		app.DAO.Members().IterateByOffset(0, totalMembers, func(member address) bool {
+			validatorPayout := chain.Coins{chain.Coin{Denom: "ugnot", Amount: rewardPerValidator}}
+			bnk.SendCoins(pkgAddr, member, validatorPayout)
+			return false
+		})
+
+		// Pay the applicant the remaining 95%
+		applicantPayout := chain.Coins{chain.Coin{Denom: "ugnot", Amount: applicantReward}}
+		bnk.SendCoins(pkgAddr, p.Applicant, applicantPayout)
 	} else {
 		// Reject - not unanimous
 		app.Status = StatusRejected
