@@ -48,7 +48,7 @@ func GetLeaderboard() []LeaderboardEntry {
 		if !ok || app == nil {
 			return false
 		}
-		
+
 		// Only count approved applications (20 points)
 		if app.Status == StatusApproved {
 			entry := getEntry(app.Applicant)
@@ -62,7 +62,7 @@ func GetLeaderboard() []LeaderboardEntry {
 			entry.ValidationsPerformed++
 			entry.Score += 5
 		}
-		
+
 		return false
 	})
 
