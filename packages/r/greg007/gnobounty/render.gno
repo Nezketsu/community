@@ -14,8 +14,9 @@ func ListBounties() string {
 	minSend := ufmt.Sprintf("%dugnot", minimumBounty)
 	createBountyLink := txlink.NewLink("CreateBounty").
 		AddArgs(
-			"issueURL", "https://github.com/your-org/your-repo/issues/123",
-			"description", "Describe the work your bounty covers",
+			"title", "",
+			"issueURL", "",
+			"description", "",
 		).
 		SetSend(minSend).
 		URL()
@@ -31,6 +32,8 @@ func ListBounties() string {
 	output += ufmt.Sprintf(" _(minimum reward: %s)_", minSend)
 	output += " | "
 	output += md.Link("📋 View All Validators", "/r/greg007/gnobounty:validators")
+	output += " | "
+	output += md.Link("🏆 Leaderboard", "/r/greg007/gnobounty:leaderboard")
 	output += "\n\n"
 
 	// Add validator stats
@@ -39,6 +42,7 @@ func ListBounties() string {
 
 	output += "---\n\n"
 	output += "## 💎 Active Bounties\n\n"
+	output += "**How to apply:** To apply to a bounty, you need to give your **MERGED PR** (important) URL in the transaction. You also need to write your Gno address in the description of your PR to verify your identity. If no address is written, the bounty can be refused.\n\n"
 
 	if bountyCount == 0 {
 		output += "No bounties available"
@@ -48,7 +52,7 @@ func ListBounties() string {
 	bounties.Iterate("", "", func(key string, value interface{}) bool {
 		bounty := value.(*Bounty)
 		if !bounty.IsClaimed {
-			output += ufmt.Sprintf("## Bounty #%d\n", bounty.ID)
+			output += ufmt.Sprintf("## Bounty #%d: %s\n", bounty.ID, bounty.Title)
 			output += ufmt.Sprintf("**Issue:** %s\n", bounty.IssueURL)
 			output += ufmt.Sprintf("**Description:** %s\n", bounty.Description)
 			output += ufmt.Sprintf("**Reward:** %d ugnot (%.2f GNOT)\n", bounty.Amount, float64(bounty.Amount)/1000000.0)
@@ -59,7 +63,7 @@ func ListBounties() string {
 			applyLink := txlink.NewLink("ApplyForBounty").
 				AddArgs(
 					"bountyID", ufmt.Sprintf("%d", bounty.ID),
-					"prLink", "https://github.com/your-org/your-repo/pull/123",
+					"prLink", "",
 				).
 				URL()
 			output += md.Link("📝 Apply for this bounty", applyLink)
@@ -83,7 +87,7 @@ func GetBountyDetails(id uint64) string {
 		return "Bounty not found"
 	}
 
-	output := ufmt.Sprintf("# Bounty #%d\n\n", bounty.ID)
+	output := ufmt.Sprintf("# Bounty #%d: %s\n\n", bounty.ID, bounty.Title)
 	output += ufmt.Sprintf("**Issue URL:** %s\n", bounty.IssueURL)
 	output += ufmt.Sprintf("**Description:** %s\n", bounty.Description)
 	output += ufmt.Sprintf("**Reward:** %d ugnot (%.2f GNOT)\n", bounty.Amount, float64(bounty.Amount)/1000000.0)
@@ -96,12 +100,13 @@ func GetBountyDetails(id uint64) string {
 		output += ufmt.Sprintf("**Claimed at:** %s\n", bounty.ClaimedAt.Format("2006-01-02 15:04:05"))
 	} else {
 		output += ufmt.Sprintf("**Status:** OPEN\n\n")
+		output += "**How to apply:** To apply to a bounty, you need to give your **MERGED PR** (important) URL in the transaction. You also need to write your Gno address in the description of your PR to verify your identity. If no address is written, the bounty can be refused.\n\n"
 
 		// Add apply button
 		applyLink := txlink.NewLink("ApplyForBounty").
 			AddArgs(
 				"bountyID", ufmt.Sprintf("%d", id),
-				"prLink", "https://github.com/your-org/your-repo/pull/123",
+				"prLink", "",
 			).
 			URL()
 		output += md.Link("Apply for this bounty", applyLink) + "\n\n"
@@ -267,15 +272,10 @@ func RenderValidators() string {
 	output := ListValidators()
 
 	// Add register button
-	registerValidatorLink := txlink.NewLink("AddValidator").
-		AddArgs(
-			"validatorAddr", "your_address_here",
-		).
-		URL()
+	registerValidatorLink := txlink.NewLink("AddValidator").URL()
 	output += "## Register\n\n"
 	output += md.Link("👨‍⚖️ Register as Validator", registerValidatorLink)
 	output += "\n\n"
-	output += "_Note: Replace 'your_address_here' with your actual address when registering._\n"
 
 	return output
 }
@@ -289,6 +289,10 @@ func Render(path string) string {
 	// Check for special paths
 	if path == "validators" {
 		return RenderValidators()
+	}
+
+	if path == "leaderboard" {
+		return RenderLeaderboard()
 	}
 
 	// Parse bounty ID from path

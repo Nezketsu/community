@@ -9,6 +9,7 @@ import (
 // Bounty represents a bounty post for an issue
 type Bounty struct {
 	ID          uint64
+	Title       string // Short title for the bounty
 	IssueURL    string
 	Description string
 	Amount      int64 // Amount in ugnot
@@ -29,6 +30,13 @@ type Application struct {
 	Status     ApplicationStatus
 	DAO        *commondao.CommonDAO // Private DAO for this application
 	ProposalID uint64               // Proposal ID in the DAO
+	Votes      []VoteRecord         // Local record of votes
+}
+
+// VoteRecord represents a vote cast by a validator
+type VoteRecord struct {
+	Voter  address
+	Choice commondao.VoteChoice
 }
 
 // ApplicationStatus represents the status of an application

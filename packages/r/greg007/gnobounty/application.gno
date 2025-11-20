@@ -139,6 +139,12 @@ func Vote(_ realm, applicationID uint64, vote string) {
 		panic(err)
 	}
 
+	// Record vote locally
+	app.Votes = append(app.Votes, VoteRecord{
+		Voter:  caller,
+		Choice: voteChoice,
+	})
+
 	// Try to execute the proposal
 	// Tally() will return true when all validators have voted
 	// Execute() will handle both approval and rejection
@@ -178,12 +184,10 @@ func GetApplicationsForValidator(validatorAddr address) []*Application {
 	applications.Iterate("", "", func(key string, value interface{}) bool {
 		app := value.(*Application)
 		// Check if validator is a member of the application's DAO
-		// We need to check if this validator was selected for this application
-		// by iterating through applications and checking the selected validators
 		if app.DAO != nil && app.Status == StatusPending {
-			// We can't easily get the members from the DAO interface
-			// Instead, we'll add the application and let the validator see all pending ones
-			apps = append(apps, app)
+			if app.DAO.Members().Has(validatorAddr) {
+				apps = append(apps, app)
+			}
 		}
 		return false
 	})

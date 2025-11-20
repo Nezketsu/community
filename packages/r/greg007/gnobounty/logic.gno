@@ -10,16 +10,20 @@ import (
 )
 
 // CreateBounty creates a new bounty post
+// title: short title for the bounty
 // issueURL: link to the GitHub issue or other issue tracker
 // description: description of what needs to be done
 // Caller must send GNOT tokens with this transaction
-func CreateBounty(_ realm, issueURL, description string) uint64 {
+func CreateBounty(_ realm, title, issueURL, description string) uint64 {
 	// Validate inputs
+	if title == "" {
+		panic("title is required")
+	}
 	if issueURL == "" {
-		panic("issue URL cannot be empty")
+		panic("issue URL is required")
 	}
 	if description == "" {
-		panic("description cannot be empty")
+		panic("description is required")
 	}
 
 	// Get the sent coins
@@ -45,6 +49,7 @@ func CreateBounty(_ realm, issueURL, description string) uint64 {
 	bountyCount++
 	bounty := &Bounty{
 		ID:          bountyCount,
+		Title:       title,
 		IssueURL:    issueURL,
 		Description: description,
 		Amount:      gnotAmount,
