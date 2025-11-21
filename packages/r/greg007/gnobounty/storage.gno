@@ -1,7 +1,10 @@
 package gnobounty
 
 import (
+	"chain/runtime"
+
 	"gno.land/p/nt/avl"
+	"gno.land/p/nt/ownable"
 	"gno.land/p/nt/ufmt"
 )
 
@@ -20,7 +23,13 @@ var (
 
 	// Validator reward percentage (5% of bounty split among validators)
 	validatorRewardPercent int64 = 5 // 5% of bounty goes to validators
+
+	ownership *ownable.Ownable
 )
+
+func init() {
+	ownership = ownable.New()
+}
 
 // GetBounty returns a bounty by ID
 func GetBounty(id uint64) *Bounty {
@@ -38,7 +47,9 @@ func GetBountyCount() uint64 {
 
 // SetMinimumBounty allows setting minimum bounty amount (admin function)
 func SetMinimumBounty(amount int64) {
-	// In production, you'd want to add proper admin checks here
+	if ownership.Owner() != runtime.OriginCaller() {
+		panic("unauthorized: only owner can set minimum bounty")
+	}
 	minimumBounty = amount
 }
 

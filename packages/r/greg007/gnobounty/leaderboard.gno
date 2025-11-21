@@ -1,6 +1,7 @@
 package gnobounty
 
 import (
+	"gno.land/p/nt/avl"
 	"gno.land/p/nt/ufmt"
 )
 
@@ -15,14 +16,7 @@ type LeaderboardEntry struct {
 
 // GetLeaderboard aggregates stats for all users
 func GetLeaderboard() []LeaderboardEntry {
-	stats := make(map[address]*LeaderboardEntry)
-
-	getEntry := func(addr address) *LeaderboardEntry {
-		if _, ok := stats[addr]; !ok {
-			stats[addr] = &LeaderboardEntry{Address: addr}
-		}
-		return stats[addr]
-	}
+	var stats avl.Tree // address -> *LeaderboardEntry
 
 	// Count bounties created (10 points)
 	bounties.Iterate("", "", func(key string, value interface{}) bool {
@@ -33,7 +27,7 @@ func GetLeaderboard() []LeaderboardEntry {
 		if !ok || bounty == nil {
 			return false
 		}
-		entry := getEntry(bounty.Creator)
+		entry := getEntry(&stats, bounty.Creator)
 		entry.BountiesCreated++
 		entry.Score += 10
 		return false
@@ -51,14 +45,14 @@ func GetLeaderboard() []LeaderboardEntry {
 
 		// Only count approved applications (20 points)
 		if app.Status == StatusApproved {
-			entry := getEntry(app.Applicant)
+			entry := getEntry(&stats, app.Applicant)
 			entry.BountiesApplied++
 			entry.Score += 20
 		}
 
 		// Count validations from local record (5 points)
 		for _, vote := range app.Votes {
-			entry := getEntry(vote.Voter)
+			entry := getEntry(&stats, vote.Voter)
 			entry.ValidationsPerformed++
 			entry.Score += 5
 		}
@@ -66,11 +60,13 @@ func GetLeaderboard() []LeaderboardEntry {
 		return false
 	})
 
-	// Convert map to slice
+	// Convert tree to slice
 	var result []LeaderboardEntry
-	for _, entry := range stats {
+	stats.Iterate("", "", func(key string, value interface{}) bool {
+		entry := value.(*LeaderboardEntry)
 		result = append(result, *entry)
-	}
+		return false
+	})
 
 	// Sort by Score descending
 	// Manual bubble sort since sort.Slice is not available
@@ -125,4 +121,15 @@ func RenderLeaderboard() string {
 	}
 
 	return output
+}
+
+func getEntry(stats *avl.Tree, addr address) *LeaderboardEntry {
+	key := string(addr)
+	val, ok := stats.Get(key)
+	if !ok {
+		entry := &LeaderboardEntry{Address: addr}
+		stats.Set(key, entry)
+		return entry
+	}
+	return val.(*LeaderboardEntry)
 }

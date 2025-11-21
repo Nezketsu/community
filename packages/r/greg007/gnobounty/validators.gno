@@ -7,11 +7,12 @@ import (
 	"gno.land/p/nt/ufmt"
 )
 
-// AddValidator adds a new validator to the system
-// Registers the address of the person who signs the transaction
-func AddValidator(_ realm) {
-	// Get the address of the person who signed the transaction
-	validatorAddr := runtime.OriginCaller()
+// AddValidator adds a new validator to the system (Admin only)
+func AddValidator(_ realm, validatorAddr address) {
+	// Check if caller is admin
+	if ownership.Owner() != runtime.OriginCaller() {
+		panic("unauthorized: only owner can add validators")
+	}
 
 	// Check if validator already exists
 	if _, exists := validators.Get(string(validatorAddr)); exists {
@@ -28,8 +29,13 @@ func AddValidator(_ realm) {
 	validatorList = append(validatorList, validatorAddr)
 }
 
-// RemoveValidator removes a validator from the system
+// RemoveValidator removes a validator from the system (Admin only)
 func RemoveValidator(_ realm, validatorAddr address) {
+	// Check if caller is admin
+	if ownership.Owner() != runtime.OriginCaller() {
+		panic("unauthorized: only owner can remove validators")
+	}
+
 	validatorInterface, exists := validators.Get(string(validatorAddr))
 	if !exists {
 		panic("validator not found")

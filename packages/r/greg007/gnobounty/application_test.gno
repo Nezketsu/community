@@ -3,14 +3,19 @@ package gnobounty
 import (
 	"testing"
 
+	"gno.land/p/nt/ownable"
 	"gno.land/p/nt/testutils"
 )
 
 func TestAddValidator(t *testing.T) {
+	// Setup owner
+	adminAddr := testutils.TestAddress("admin")
+	testing.SetOriginCaller(adminAddr)
+	ownership = ownable.New()
+
 	// Add a validator
 	validator1 := testutils.TestAddress("validator1")
-	testing.SetOriginCaller(validator1)
-	AddValidator(cross)
+	AddValidator(cross, validator1)
 
 	if !IsValidator(validator1) {
 		t.Error("Validator should be active")
@@ -23,13 +28,17 @@ func TestAddValidator(t *testing.T) {
 }
 
 func TestValidatorList(t *testing.T) {
+	// Setup owner
+	adminAddr := testutils.TestAddress("admin")
+	testing.SetOriginCaller(adminAddr)
+	ownership = ownable.New()
+
 	// Add more validators
 	validator2 := testutils.TestAddress("validator2")
-	testing.SetOriginCaller(validator2)
 
 	// Check if already exists before adding
 	if !IsValidator(validator2) {
-		AddValidator(cross)
+		AddValidator(cross, validator2)
 	}
 
 	if !IsValidator(validator2) {

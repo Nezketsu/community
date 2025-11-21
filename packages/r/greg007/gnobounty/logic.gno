@@ -115,12 +115,12 @@ func CancelBounty(_ realm, id uint64) {
 		panic("only bounty creator can cancel")
 	}
 
+	// Remove bounty first (Checks-Effects-Interactions)
+	bounties.Remove(ufmt.Sprintf("%d", id))
+
 	// Refund the creator
 	bnk := banker.NewBanker(banker.BankerTypeRealmSend)
 	send := chain.Coins{chain.Coin{Denom: "ugnot", Amount: bounty.Amount}}
 	pkgAddr := chain.PackageAddress("gno.land/r/greg007/gnobounty")
 	bnk.SendCoins(pkgAddr, bounty.Creator, send)
-
-	// Remove bounty
-	bounties.Remove(ufmt.Sprintf("%d", id))
 }
