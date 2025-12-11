@@ -8,9 +8,11 @@ import (
 )
 
 func TestAddValidator(t *testing.T) {
-	// Setup owner
+	// Setup owner - use testing.SetOriginCaller to set who is calling
 	adminAddr := testutils.TestAddress("admin")
 	testing.SetOriginCaller(adminAddr)
+
+	// Initialize ownership with current caller as owner
 	ownership = ownable.New()
 
 	// Add a validator
@@ -28,10 +30,9 @@ func TestAddValidator(t *testing.T) {
 }
 
 func TestValidatorList(t *testing.T) {
-	// Setup owner
+	// Setup owner - reuse same admin from previous test
 	adminAddr := testutils.TestAddress("admin")
 	testing.SetOriginCaller(adminAddr)
-	ownership = ownable.New()
 
 	// Add more validators
 	validator2 := testutils.TestAddress("validator2")

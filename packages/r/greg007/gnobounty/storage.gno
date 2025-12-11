@@ -1,8 +1,6 @@
 package gnobounty
 
 import (
-	"chain/runtime"
-
 	"gno.land/p/nt/avl"
 	"gno.land/p/nt/ownable"
 	"gno.land/p/nt/ufmt"
@@ -28,7 +26,7 @@ var (
 )
 
 func init() {
-	ownership = ownable.New()
+	ownership = ownable.NewWithOrigin()
 }
 
 // GetBounty returns a bounty by ID
@@ -47,9 +45,7 @@ func GetBountyCount() uint64 {
 
 // SetMinimumBounty allows setting minimum bounty amount (admin function)
 func SetMinimumBounty(amount int64) {
-	if ownership.Owner() != runtime.OriginCaller() {
-		panic("unauthorized: only owner can set minimum bounty")
-	}
+	ownership.AssertOwnedByPrevious()
 	minimumBounty = amount
 }
 
@@ -97,4 +93,9 @@ func GetActiveValidatorCount() int {
 		return false
 	})
 	return count
+}
+
+// GetOwner returns the owner address (helper function for debugging)
+func GetOwner() address {
+	return ownership.Owner()
 }

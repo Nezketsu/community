@@ -49,13 +49,13 @@ func (p *ClaimBountyProposal) VotingPeriod() time.Duration {
 
 // Tally counts votes and determines if proposal is ready to execute
 // Returns true when all validators have voted (regardless of outcome)
-func (p *ClaimBountyProposal) Tally(votes commondao.ReadonlyVotingRecord, members commondao.MemberSet) (bool, error) {
-	totalMembers := members.Size()
+func (p *ClaimBountyProposal) Tally(ctx commondao.VotingContext) (bool, error) {
+	totalMembers := ctx.Members.Size()
 	if totalMembers == 0 {
 		return false, ufmt.Errorf("no members in DAO")
 	}
 
-	totalVotes := votes.Size()
+	totalVotes := ctx.VotingRecord.Size()
 
 	// Return true when all validators have voted
 	// This allows Execute to be called and handle approval/rejection

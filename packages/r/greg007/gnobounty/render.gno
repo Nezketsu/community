@@ -23,11 +23,7 @@ func ListBounties() string {
 
 	output := "# GnoBounty - Decentralized Bounty System\n\n"
 
-	// Add validator registration button
-	registerValidatorLink := txlink.NewLink("AddValidator").URL()
 	output += "## 🎯 Quick Actions\n\n"
-	output += md.Link("👨‍⚖️ Register as Validator", registerValidatorLink)
-	output += " | "
 	output += md.Link("💰 Create a new bounty", createBountyLink)
 	output += ufmt.Sprintf(" _(minimum reward: %s)_", minSend)
 	output += " | "
@@ -267,17 +263,9 @@ func RenderMyVotes(validatorAddr address) string {
 	return output
 }
 
-// RenderValidators shows all validators with a registration button
+// RenderValidators shows all validators
 func RenderValidators() string {
-	output := ListValidators()
-
-	// Add register button
-	registerValidatorLink := txlink.NewLink("AddValidator").URL()
-	output += "## Register\n\n"
-	output += md.Link("👨‍⚖️ Register as Validator", registerValidatorLink)
-	output += "\n\n"
-
-	return output
+	return ListValidators()
 }
 
 // Render implements the Render() method for the realm

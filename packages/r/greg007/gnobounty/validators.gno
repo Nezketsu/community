@@ -1,7 +1,6 @@
 package gnobounty
 
 import (
-	"chain/runtime"
 	"time"
 
 	"gno.land/p/nt/ufmt"
@@ -10,9 +9,7 @@ import (
 // AddValidator adds a new validator to the system (Admin only)
 func AddValidator(_ realm, validatorAddr address) {
 	// Check if caller is admin
-	if ownership.Owner() != runtime.OriginCaller() {
-		panic("unauthorized: only owner can add validators")
-	}
+	ownership.AssertOwnedByPrevious()
 
 	// Check if validator already exists
 	if _, exists := validators.Get(string(validatorAddr)); exists {
@@ -32,9 +29,7 @@ func AddValidator(_ realm, validatorAddr address) {
 // RemoveValidator removes a validator from the system (Admin only)
 func RemoveValidator(_ realm, validatorAddr address) {
 	// Check if caller is admin
-	if ownership.Owner() != runtime.OriginCaller() {
-		panic("unauthorized: only owner can remove validators")
-	}
+	ownership.AssertOwnedByPrevious()
 
 	validatorInterface, exists := validators.Get(string(validatorAddr))
 	if !exists {
