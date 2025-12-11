@@ -27,9 +27,9 @@ func ListBounties() string {
 	output += md.Link("💰 Create a new bounty", createBountyLink)
 	output += ufmt.Sprintf(" _(minimum reward: %s)_", minSend)
 	output += " | "
-	output += md.Link("📋 View All Validators", "/r/greg007/gnobounty:validators")
+	output += md.Link("📋 View All Validators", "/"+pkgPath+":validators")
 	output += " | "
-	output += md.Link("🏆 Leaderboard", "/r/greg007/gnobounty:leaderboard")
+	output += md.Link("🏆 Leaderboard", "/"+pkgPath+":leaderboard")
 	output += "\n\n"
 
 	// Add validator stats
@@ -66,7 +66,7 @@ func ListBounties() string {
 			output += " | "
 
 			// Add view details link
-			detailsPath := ufmt.Sprintf("/r/greg007/gnobounty:%d", bounty.ID)
+			detailsPath := ufmt.Sprintf("/%s:%d", pkgPath, bounty.ID)
 			output += md.Link("🔍 View details", detailsPath)
 			output += "\n\n"
 		}
@@ -286,7 +286,7 @@ func Render(path string) string {
 	// Parse bounty ID from path
 	id, err := strconv.Atoi(path)
 	if err != nil {
-		return "Invalid path. Use /r/greg007/gnobounty for bounties or /r/greg007/gnobounty:validators for validators list"
+		return ufmt.Sprintf("Invalid path. Use /%s for bounties or /%s:validators for validators list", pkgPath, pkgPath)
 	}
 
 	return GetBountyDetails(uint64(id))

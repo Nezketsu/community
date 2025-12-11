@@ -94,7 +94,6 @@ func ClaimBounty(_ realm, id uint64, claimer address) {
 	// Transfer bounty amount to claimer
 	bnk := banker.NewBanker(banker.BankerTypeRealmSend)
 	send := chain.Coins{chain.Coin{Denom: "ugnot", Amount: bounty.Amount}}
-	pkgAddr := chain.PackageAddress("gno.land/r/greg007/gnobounty")
 	bnk.SendCoins(pkgAddr, claimer, send)
 }
 
@@ -121,6 +120,5 @@ func CancelBounty(_ realm, id uint64) {
 	// Refund the creator
 	bnk := banker.NewBanker(banker.BankerTypeRealmSend)
 	send := chain.Coins{chain.Coin{Denom: "ugnot", Amount: bounty.Amount}}
-	pkgAddr := chain.PackageAddress("gno.land/r/greg007/gnobounty")
 	bnk.SendCoins(pkgAddr, bounty.Creator, send)
 }

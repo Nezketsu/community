@@ -1,6 +1,8 @@
 package gnobounty
 
 import (
+	"chain"
+
 	"gno.land/p/nt/avl"
 	"gno.land/p/nt/ownable"
 	"gno.land/p/nt/ufmt"
@@ -23,10 +25,17 @@ var (
 	validatorRewardPercent int64 = 5 // 5% of bounty goes to validators
 
 	ownership *ownable.Ownable
+
+	// Package address - stored for easy redeployment
+	pkgAddr address
+
+	// Package path - used in URLs for rendering
+	pkgPath string = "gno.land/r/greg007/gnobounty"
 )
 
 func init() {
 	ownership = ownable.NewWithOrigin()
+	pkgAddr = chain.PackageAddress(pkgPath)
 }
 
 // GetBounty returns a bounty by ID
@@ -47,6 +56,16 @@ func GetBountyCount() uint64 {
 func SetMinimumBounty(amount int64) {
 	ownership.AssertOwnedByPrevious()
 	minimumBounty = amount
+}
+
+// SetPackagePath allows setting the package path for URLs (admin function)
+func SetPackagePath(path string) {
+	ownership.AssertOwnedByPrevious()
+	if path == "" {
+		panic("package path cannot be empty")
+	}
+	pkgPath = path
+	pkgAddr = chain.PackageAddress(path)
 }
 
 // GetApplication returns an application by ID
@@ -98,4 +117,9 @@ func GetActiveValidatorCount() int {
 // GetOwner returns the owner address (helper function for debugging)
 func GetOwner() address {
 	return ownership.Owner()
+}
+
+// GetPackagePath returns the current package path
+func GetPackagePath() string {
+	return pkgPath
 }

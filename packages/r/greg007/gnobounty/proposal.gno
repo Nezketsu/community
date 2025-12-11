@@ -112,7 +112,6 @@ func (p *ClaimBountyProposal) Execute(_ realm) error {
 
 		// Transfer rewards
 		bnk := banker.NewBanker(banker.BankerTypeRealmSend)
-		pkgAddr := chain.PackageAddress("gno.land/r/greg007/gnobounty")
 
 		// Pay each validator their share
 		app.DAO.Members().IterateByOffset(0, totalMembers, func(member address) bool {

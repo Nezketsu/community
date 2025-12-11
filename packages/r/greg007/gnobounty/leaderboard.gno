@@ -1,6 +1,7 @@
 package gnobounty
 
 import (
+	"gno.land/p/moul/md"
 	"gno.land/p/nt/avl"
 	"gno.land/p/nt/ufmt"
 )
@@ -86,41 +87,56 @@ func GetLeaderboard() []LeaderboardEntry {
 func RenderLeaderboard() string {
 	entries := GetLeaderboard()
 
-	output := "# 🏆 Community Leaderboard\n\n"
+	output := md.H1("🏆 Community Leaderboard")
 	output += "Top contributors to the GnoBounty ecosystem.\n\n"
-	output += "**Scoring:** Bounty Creation (10pts) | Approved Application (20pts) | Validation (5pts)\n\n"
+	output += md.Bold("Scoring:") + " Bounty Creation (10pts) | Approved Application (20pts) | Validation (5pts)\n\n"
 
+	if len(entries) == 0 {
+		output += "No activity recorded yet."
+		return output
+	}
+
+	// Table header
 	output += "| Rank | User | Score | 💰 Bounties | 📝 Applications | ⚖️ Validations |\n"
 	output += "|---|---|---|---|---|---|\n"
 
+	// Table rows
 	for i, entry := range entries {
-		rank := ""
-		switch i {
-		case 0:
-			rank = "🥇"
-		case 1:
-			rank = "🥈"
-		case 2:
-			rank = "🥉"
-		default:
-			rank = ufmt.Sprintf("%d", i+1)
-		}
-
-		output += ufmt.Sprintf("| %s | %s | **%d** | %d | %d | %d |\n",
+		rank := getRankDisplay(i)
+		output += tableRow(
 			rank,
-			entry.Address,
-			entry.Score,
-			entry.BountiesCreated,
-			entry.BountiesApplied,
-			entry.ValidationsPerformed,
+			string(entry.Address),
+			md.Bold(ufmt.Sprintf("%d", entry.Score)),
+			ufmt.Sprintf("%d", entry.BountiesCreated),
+			ufmt.Sprintf("%d", entry.BountiesApplied),
+			ufmt.Sprintf("%d", entry.ValidationsPerformed),
 		)
 	}
 
-	if len(entries) == 0 {
-		output += "\nNo activity recorded yet."
-	}
-
 	return output
+}
+
+// getRankDisplay returns the rank display (medal for top 3, number otherwise)
+func getRankDisplay(position int) string {
+	switch position {
+	case 0:
+		return "🥇"
+	case 1:
+		return "🥈"
+	case 2:
+		return "🥉"
+	default:
+		return ufmt.Sprintf("%d", position+1)
+	}
+}
+
+// tableRow creates a markdown table row
+func tableRow(cells ...string) string {
+	output := "|"
+	for _, cell := range cells {
+		output += " " + cell + " |"
+	}
+	return output + "\n"
 }
 
 func getEntry(stats *avl.Tree, addr address) *LeaderboardEntry {
