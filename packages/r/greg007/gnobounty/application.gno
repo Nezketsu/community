@@ -65,7 +65,11 @@ func ApplyForBounty(_ realm, bountyID uint64, prLink string) uint64 {
 		dao.Members().Add(validatorAddr)
 	}
 
-	// Create the application
+	// Create a proposal in the DAO to approve this application BEFORE creating the Application struct
+	proposalDef := NewClaimBountyProposal(bountyID, applicationCount, caller, prLink)
+	proposal := dao.MustPropose(caller, proposalDef)
+
+	// Create the application with the correct proposalID from the start
 	application := &Application{
 		ID:         applicationCount,
 		BountyID:   bountyID,
@@ -74,14 +78,8 @@ func ApplyForBounty(_ realm, bountyID uint64, prLink string) uint64 {
 		AppliedAt:  time.Now(),
 		Status:     StatusPending,
 		DAO:        dao,
-		ProposalID: 0, // Will be set when proposal is created
+		ProposalID: proposal.ID(),
 	}
-
-	// Create a proposal in the DAO to approve this application
-	proposalDef := NewClaimBountyProposal(bountyID, applicationCount, caller, prLink)
-
-	proposal := dao.MustPropose(caller, proposalDef)
-	application.ProposalID = proposal.ID()
 
 	// Store application
 	applications.Set(ufmt.Sprintf("%d", applicationCount), application)
@@ -184,10 +182,8 @@ func GetApplicationsForValidator(validatorAddr address) []*Application {
 	applications.Iterate("", "", func(key string, value interface{}) bool {
 		app := value.(*Application)
 		// Check if validator is a member of the application's DAO
-		if app.DAO != nil && app.Status == StatusPending {
-			if app.DAO.Members().Has(validatorAddr) {
-				apps = append(apps, app)
-			}
+		if app.DAO != nil && app.Status == StatusPending && app.DAO.Members().Has(validatorAddr) {
+			apps = append(apps, app)
 		}
 		return false
 	})
