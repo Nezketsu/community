@@ -1,3 +1,4 @@
+// Package trustfactor provides user registration functionality.
 package trustfactor
 
 import (
@@ -5,10 +6,6 @@ import (
 
 	"chain/runtime"
 )
-
-// =============================================================================
-// USER REGISTRATION
-// =============================================================================
 
 // Register allows a user to join the TrustFactor system with an initial score of 5.0
 func Register(cur realm) {

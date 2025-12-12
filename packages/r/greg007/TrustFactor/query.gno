@@ -1,10 +1,7 @@
+// Package trustfactor provides public API for other realms to query trust scores.
 package trustfactor
 
 import "time"
-
-// =============================================================================
-// PUBLIC API FOR OTHER REALMS
-// =============================================================================
 
 // QueryTrustScore returns the calculated composite trust score for external use
 func QueryTrustScore(addr address) (float64, bool) {

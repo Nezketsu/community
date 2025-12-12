@@ -1,3 +1,4 @@
+// Package trustfactor provides voting functions for trust score management.
 package trustfactor
 
 import (
@@ -5,10 +6,6 @@ import (
 
 	"chain/runtime"
 )
-
-// =============================================================================
-// VOTING FUNCTIONS
-// =============================================================================
 
 // Upvote increases a user's trust score based on the voter's own reputation
 func Upvote(cur realm, target address) {

@@ -1,3 +1,4 @@
+// Package trustfactor provides admin functions for owner-only operations.
 package trustfactor
 
 import (
@@ -5,10 +6,6 @@ import (
 
 	"gno.land/p/nt/ownable"
 )
-
-// =============================================================================
-// ADMIN FUNCTIONS (OWNER ONLY)
-// =============================================================================
 
 // RemoveUser removes a malicious user from the system (emergency function)
 func RemoveUser(cur realm, target address) {

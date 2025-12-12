@@ -1,13 +1,10 @@
+// Package trustfactor manages global state variables and initialization.
 package trustfactor
 
 import (
 	"gno.land/p/nt/avl"
 	"gno.land/p/nt/ownable"
 )
-
-// =============================================================================
-// GLOBAL STATE VARIABLES
-// =============================================================================
 
 var (
 	// Main storage using AVL trees
@@ -26,17 +23,9 @@ var (
 	totalUsers int
 )
 
-// =============================================================================
-// CONSTANTS
-// =============================================================================
-
 const (
 	MAX_HISTORY_SIZE = 50 // Maximum vote history entries per user
 )
-
-// =============================================================================
-// INITIALIZATION
-// =============================================================================
 
 func init() {
 	trustScores = avl.NewTree()

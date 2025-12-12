@@ -1,3 +1,4 @@
+// Package trustfactor provides score index management using AVL-based sorted access.
 package trustfactor
 
 import (
@@ -6,10 +7,6 @@ import (
 	"gno.land/p/nt/avl"
 	"gno.land/p/nt/ufmt"
 )
-
-// =============================================================================
-// SCORE INDEX MANAGEMENT - AVL-based sorted access
-// =============================================================================
 
 // makeScoreKey creates a lexicographically sortable key for the scoreIndex.
 // Format: "inverted_score_address" where inverted_score ensures descending order.
@@ -54,10 +51,6 @@ func updateScoreIndex(addr address, oldTrust, newTrust TrustScore) {
 	addToScoreIndex(addr, newTrust)
 }
 
-// =============================================================================
-// SORTED USER ACCESS - Pure AVL iteration (no slice allocation)
-// =============================================================================
-
 // IterateSortedUsers iterates over all users in descending score order.
 // Callback receives (address, index) and returns true to stop iteration.
 func IterateSortedUsers(callback func(addr address, index int) bool) {
@@ -88,10 +81,6 @@ func GetTopUsers(limit int, filter func(address) bool) []address {
 
 	return result
 }
-
-// =============================================================================
-// SEARCH AND FILTERING - Pure AVL Iterator Pattern
-// =============================================================================
 
 // FilterUsers iterates over filtered and paginated users using pure AVL iteration.
 // Returns total count and invokes callback for each result in the page.
@@ -157,10 +146,6 @@ func FilterUsers(searchTerm string, limit int, offset int, callback func(addr ad
 func containsSubstring(str, substr string) bool {
 	return strings.Index(str, substr) >= 0
 }
-
-// =============================================================================
-// STATISTICS
-// =============================================================================
 
 // GetPerformanceStats returns system statistics
 func GetPerformanceStats() (int, int) {
