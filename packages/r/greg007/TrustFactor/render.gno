@@ -42,17 +42,11 @@ func renderMainPageWithFilter(filter string) string {
 		"Page will reload with filtered results",
 	}) + "\n"
 
-	var topUsers []address
-	sortedUsers := GetSortedUsers()
-	for _, addr := range sortedUsers {
+	// Get top 5 popular users (with 3+ votes) using AVL iteration
+	topUsers := GetTopUsers(5, func(addr address) bool {
 		trust := GetTrustDetails(addr)
-		if trust.TotalVotes >= 3 {
-			topUsers = append(topUsers, addr)
-			if len(topUsers) >= 5 {
-				break
-			}
-		}
-	}
+		return trust.TotalVotes >= 3
+	})
 
 	if len(topUsers) > 0 {
 		result += md.Bold("⭐ Popular Users:") + "\n\n"
@@ -73,25 +67,26 @@ func renderMainPageWithFilter(filter string) string {
 	result += md.H2("Trust Scores for Addresses:")
 
 	const USERS_PER_PAGE = 20
-	filteredAddrs, _ := FilterUsers(filter, USERS_PER_PAGE, 0)
 
+	// Collect users using AVL iterator (no slice materialization)
 	var users []UserDisplay
-	for _, addr := range filteredAddrs {
+	totalMatches := FilterUsers(filter, USERS_PER_PAGE, 0, func(addr address, index int) bool {
 		trust := GetTrustDetails(addr)
 		users = append(users, UserDisplay{
 			addr:           addr,
 			trust:          trust,
 			compositeScore: calculateCompositeScore(trust),
 		})
-	}
+		return false // Continue
+	})
 
-	if len(users) == 0 && filter != "" {
+	if totalMatches == 0 && filter != "" {
 		result += "❌ " + md.Bold("No users found with filter: ") + md.InlineCode(filter) + "\n\n"
 		result += "Try with a different part of the address or remove the filter.\n\n"
 		return result
 	}
 
-	if len(users) == 0 {
+	if totalMatches == 0 {
 		result += "No trust scores registered yet.\n\n"
 		result += md.Italic("Click the button above to register!") + "\n"
 		return result
@@ -244,10 +239,12 @@ func renderSearchResults(query string) string {
 
 	result := md.H1("🔍 Search results for: " + md.InlineCode(query))
 
-	// Use FilterUsers to get matches (already sorted by score)
-	matches, _ := FilterUsers(query, 100, 0) // Get up to 100 matches
-
-	matchCount := len(matches)
+	// Collect matches using AVL iterator
+	var matches []address
+	matchCount := FilterUsers(query, 100, 0, func(addr address, index int) bool {
+		matches = append(matches, addr)
+		return false // Continue
+	})
 
 	if matchCount == 0 {
 		result += "❌ " + md.Bold("No users found") + "\n\n"

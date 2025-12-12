@@ -18,7 +18,7 @@ func Register(cur realm) {
 		panic("user already registered")
 	}
 
-	trustScores.Set(string(caller), &TrustScore{
+	newTrust := &TrustScore{
 		Score:          5.0,
 		LastUpdate:     time.Now().Unix(),
 		Evaluator:      caller,
@@ -27,8 +27,9 @@ func Register(cur realm) {
 		NegativeVotes:  0,
 		VoterWeightSum: 0.0,
 		Confidence:     0.0,
-	})
+	}
 
+	trustScores.Set(string(caller), newTrust)
+	addToScoreIndex(caller, *newTrust)
 	totalUsers++
-	invalidateCache()
 }

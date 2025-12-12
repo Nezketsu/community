@@ -2,119 +2,155 @@ package trustfactor
 
 import (
 	"strings"
-	"time"
+
+	"gno.land/p/nt/avl"
+	"gno.land/p/nt/ufmt"
 )
 
 // =============================================================================
-// PERFORMANCE OPTIMIZATION - CACHING & SORTING
+// SCORE INDEX MANAGEMENT - AVL-based sorted access
 // =============================================================================
 
-// invalidateCache clears the sorted user cache when data changes
-func invalidateCache() {
-	lastSortTime = 0
-	sortedUsers = make([]address, 0)
+// makeScoreKey creates a lexicographically sortable key for the scoreIndex.
+// Format: "inverted_score_address" where inverted_score ensures descending order.
+//
+// To achieve descending order with lexicographic sorting, we invert the score:
+// - Max score (10.0) becomes "0000000000" (sorts first)
+// - Min score (0.0) becomes "9999999999" (sorts last)
+//
+// The formula: inverted = 9999999999 - (score * 100000000)
+// This gives us precision to 2 decimal places and proper ordering.
+func makeScoreKey(score float64, addr address) string {
+	// Convert score (0.00-10.00) to integer with 8 decimal precision
+	// Then invert for descending order
+	scoreInt := int64(score * 100000000)
+	inverted := 9999999999 - scoreInt
+
+	// Pad to 10 digits and append address
+	return ufmt.Sprintf("%010d_%s", inverted, string(addr))
 }
 
-// GetSortedUsers returns users sorted by composite score with caching
-func GetSortedUsers() []address {
-	now := time.Now().Unix()
-
-	// Check if cache is still valid
-	if now-lastSortTime < SORT_CACHE_TTL && len(sortedUsers) == totalUsers {
-		return sortedUsers
-	}
-
-	// Rebuild cache if expired or invalid
-	return rebuildSortCache()
+// addToScoreIndex adds a user to the score-based index
+func addToScoreIndex(addr address, trust TrustScore) {
+	score := calculateCompositeScore(trust)
+	key := makeScoreKey(score, addr)
+	scoreIndex.Set(key, addr)
 }
 
-// rebuildSortCache rebuilds the sorted user cache using optimized quicksort
-func rebuildSortCache() []address {
-	// Convert AVL tree to slice for sorting
-	users := make([]address, 0, trustScores.Size())
-	trustScores.Iterate("", "", func(key string, value interface{}) bool {
-		users = append(users, address(key))
-		return false
+// removeFromScoreIndex removes a user's old score entry from the index
+func removeFromScoreIndex(addr address, trust TrustScore) {
+	score := calculateCompositeScore(trust)
+	key := makeScoreKey(score, addr)
+	scoreIndex.Remove(key)
+}
+
+// updateScoreIndex updates a user's position in the score index
+// This is called whenever a user's score changes
+func updateScoreIndex(addr address, oldTrust, newTrust TrustScore) {
+	// Remove old entry
+	removeFromScoreIndex(addr, oldTrust)
+
+	// Add new entry
+	addToScoreIndex(addr, newTrust)
+}
+
+// =============================================================================
+// SORTED USER ACCESS - Pure AVL iteration (no slice allocation)
+// =============================================================================
+
+// IterateSortedUsers iterates over all users in descending score order.
+// Callback receives (address, index) and returns true to stop iteration.
+func IterateSortedUsers(callback func(addr address, index int) bool) {
+	index := 0
+	scoreIndex.Iterate("", "", func(key string, value interface{}) bool {
+		shouldStop := callback(value.(address), index)
+		index++
+		return shouldStop
+	})
+}
+
+// GetTopUsers returns the top N users without materializing full sorted list.
+// Uses direct AVL iteration for efficiency.
+func GetTopUsers(limit int, filter func(address) bool) []address {
+	result := make([]address, 0, limit)
+
+	scoreIndex.Iterate("", "", func(key string, value interface{}) bool {
+		addr := value.(address)
+
+		// Apply filter if provided
+		if filter != nil && !filter(addr) {
+			return false // Continue to next
+		}
+
+		result = append(result, addr)
+		return len(result) >= limit // Stop when limit reached
 	})
 
-	// Quicksort by composite score (descending)
-	quickSortByScore(users, 0, len(users)-1)
-
-	// Update cache
-	sortedUsers = users
-	lastSortTime = time.Now().Unix()
-	totalUsers = len(users)
-
-	return sortedUsers
-}
-
-// quickSortByScore implements quicksort algorithm for user addresses by composite score
-func quickSortByScore(users []address, low, high int) {
-	if low < high {
-		pi := partitionByScore(users, low, high)
-		quickSortByScore(users, low, pi-1)
-		quickSortByScore(users, pi+1, high)
-	}
-}
-
-// partitionByScore partitions the array for quicksort (descending order)
-func partitionByScore(users []address, low, high int) int {
-	pivotValue, _ := trustScores.Get(string(users[high]))
-	pivotScore := calculateCompositeScore(*pivotValue.(*TrustScore))
-	i := low - 1
-
-	for j := low; j < high; j++ {
-		currentValue, _ := trustScores.Get(string(users[j]))
-		currentScore := calculateCompositeScore(*currentValue.(*TrustScore))
-		if currentScore > pivotScore {
-			i++
-			users[i], users[j] = users[j], users[i]
-		}
-	}
-
-	users[i+1], users[high] = users[high], users[i+1]
-	return i + 1
+	return result
 }
 
 // =============================================================================
-// SEARCH AND FILTERING
+// SEARCH AND FILTERING - Pure AVL Iterator Pattern
 // =============================================================================
 
-// FilterUsers returns paginated and filtered user results
-func FilterUsers(searchTerm string, limit int, offset int) ([]address, int) {
+// FilterUsers iterates over filtered and paginated users using pure AVL iteration.
+// Returns total count and invokes callback for each result in the page.
+// Callback receives (address, index) and returns true to stop iteration.
+// No slices are materialized - works directly with AVL tree.
+func FilterUsers(searchTerm string, limit int, offset int, callback func(addr address, index int) bool) int {
 	if searchTerm == "" {
-		sorted := GetSortedUsers()
-		total := len(sorted)
+		// No filter - iterate paginated results directly from AVL tree
+		index := 0
+		total := scoreIndex.Size()
+		pageIndex := 0
 
-		end := offset + limit
-		if end > total {
-			end = total
-		}
-		if offset > total {
-			return []address{}, total
-		}
+		scoreIndex.Iterate("", "", func(key string, value interface{}) bool {
+			if index >= offset && index < offset+limit {
+				shouldStop := callback(value.(address), pageIndex)
+				pageIndex++
+				if shouldStop {
+					return true
+				}
+			}
+			index++
+			return index >= offset+limit // Stop after processing page
+		})
 
-		return sorted[offset:end], total
+		return total
 	}
 
-	var filtered []address
-	for _, addr := range GetSortedUsers() {
+	// With filter - need two passes: count matches, then paginate
+	// First pass: build filtered index (unavoidable for search)
+	filteredTree := avl.NewTree()
+	matchCount := 0
+
+	scoreIndex.Iterate("", "", func(key string, value interface{}) bool {
+		addr := value.(address)
 		addrStr := string(addr)
 		if containsSubstring(addrStr, searchTerm) {
-			filtered = append(filtered, addr)
+			// Preserve sort order by using sequential keys
+			filteredTree.Set(ufmt.Sprintf("%010d", matchCount), addr)
+			matchCount++
 		}
-	}
+		return false // Continue iteration
+	})
 
-	total := len(filtered)
-	end := offset + limit
-	if end > total {
-		end = total
-	}
-	if offset > total {
-		return []address{}, total
-	}
+	// Second pass: iterate paginated results from filtered tree
+	index := 0
+	pageIndex := 0
+	filteredTree.Iterate("", "", func(key string, value interface{}) bool {
+		if index >= offset && index < offset+limit {
+			shouldStop := callback(value.(address), pageIndex)
+			pageIndex++
+			if shouldStop {
+				return true
+			}
+		}
+		index++
+		return index >= offset+limit
+	})
 
-	return filtered[offset:end], total
+	return matchCount
 }
 
 // containsSubstring checks if a string contains a substring (case-sensitive)
@@ -122,7 +158,11 @@ func containsSubstring(str, substr string) bool {
 	return strings.Index(str, substr) >= 0
 }
 
-// GetPerformanceStats returns cache and performance statistics
-func GetPerformanceStats() (int, int, int64) {
-	return totalUsers, len(sortedUsers), lastSortTime
+// =============================================================================
+// STATISTICS
+// =============================================================================
+
+// GetPerformanceStats returns system statistics
+func GetPerformanceStats() (int, int) {
+	return totalUsers, scoreIndex.Size()
 }

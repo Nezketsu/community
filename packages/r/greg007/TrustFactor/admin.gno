@@ -14,6 +14,13 @@ import (
 func RemoveUser(cur realm, target address) {
 	owner.AssertOwnedByCurrent()
 
+	// Get trust score before removal for scoreIndex cleanup
+	targetValue, exists := trustScores.Get(string(target))
+	if exists {
+		targetTrust := targetValue.(*TrustScore)
+		removeFromScoreIndex(target, *targetTrust)
+	}
+
 	trustScores.Remove(string(target))
 	voteHistory.Remove(string(target))
 
@@ -30,7 +37,6 @@ func RemoveUser(cur realm, target address) {
 	}
 
 	totalUsers--
-	invalidateCache()
 }
 
 // GetOwnable returns the ownable object for ownership management

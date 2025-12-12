@@ -65,6 +65,9 @@ func Upvote(cur realm, target address) {
 	history = append(history, voteEntry)
 	voteHistory.Set(string(target), history)
 
+	// Save old state for scoreIndex update
+	oldTrust := *targetTrust
+
 	// Direct modification - no need to create a new struct and set it back!
 	targetTrust.Score = newScore
 	targetTrust.LastUpdate = time.Now().Unix()
@@ -75,7 +78,9 @@ func Upvote(cur realm, target address) {
 	targetTrust.Confidence = calculateConfidence(targetTrust.TotalVotes, targetTrust.VoterWeightSum, targetTrust.PositiveVotes)
 
 	userVotes.Set(voteKey, true)
-	invalidateCache()
+
+	// Update scoreIndex with new score
+	updateScoreIndex(target, oldTrust, *targetTrust)
 }
 
 // Downvote decreases a user's trust score based on the voter's own reputation
@@ -133,6 +138,9 @@ func Downvote(cur realm, target address) {
 	history = append(history, voteEntry)
 	voteHistory.Set(string(target), history)
 
+	// Save old state for scoreIndex update
+	oldTrust := *targetTrust
+
 	// Direct modification - no need to create a new struct and set it back!
 	targetTrust.Score = newScore
 	targetTrust.LastUpdate = time.Now().Unix()
@@ -143,5 +151,7 @@ func Downvote(cur realm, target address) {
 	targetTrust.Confidence = calculateConfidence(targetTrust.TotalVotes, targetTrust.VoterWeightSum, targetTrust.PositiveVotes)
 
 	userVotes.Set(voteKey, true)
-	invalidateCache()
+
+	// Update scoreIndex with new score
+	updateScoreIndex(target, oldTrust, *targetTrust)
 }

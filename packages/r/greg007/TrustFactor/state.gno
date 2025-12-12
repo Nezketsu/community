@@ -17,10 +17,13 @@ var (
 	userComments *avl.Tree        // User comments storage using AVL tree (key: address, value: *avl.Tree)
 	owner        *ownable.Ownable // Contract ownership management
 
-	// Performance optimization cache
-	sortedUsers  []address // Cached sorted user list
-	lastSortTime int64     // Last cache update timestamp
-	totalUsers   int       // Total registered users count
+	// Score-based index for sorted access (descending order)
+	// Key format: "score_address" where score is padded for reverse lexicographic sorting
+	// Value: address
+	scoreIndex *avl.Tree
+
+	// Total registered users count
+	totalUsers int
 )
 
 // =============================================================================
@@ -28,8 +31,7 @@ var (
 // =============================================================================
 
 const (
-	MAX_HISTORY_SIZE = 50  // Maximum vote history entries per user
-	SORT_CACHE_TTL   = 300 // Cache time-to-live in seconds
+	MAX_HISTORY_SIZE = 50 // Maximum vote history entries per user
 )
 
 // =============================================================================
@@ -41,5 +43,6 @@ func init() {
 	userVotes = avl.NewTree()
 	voteHistory = avl.NewTree()
 	userComments = avl.NewTree()
+	scoreIndex = avl.NewTree()
 	owner = ownable.NewWithAddress(address("g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5"))
 }

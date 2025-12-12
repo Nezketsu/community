@@ -35,29 +35,28 @@ func IsTrustedUser(addr address, minScore float64) bool {
 }
 
 // GetUserRank returns the user's position in the trust leaderboard
+// Uses direct AVL iteration - no slice materialization
 func GetUserRank(addr address) (int, int, bool) {
-	sortedUsers := GetSortedUsers()
+	total := scoreIndex.Size()
+	rank := 0
+	found := false
 
-	for i, userAddr := range sortedUsers {
+	IterateSortedUsers(func(userAddr address, index int) bool {
 		if userAddr == addr {
-			return i + 1, len(sortedUsers), true
+			rank = index + 1
+			found = true
+			return true // Stop iteration
 		}
-	}
+		return false // Continue
+	})
 
-	return 0, len(sortedUsers), false
+	return rank, total, found
 }
 
 // GetTopTrustedUsers returns the N most trusted users
+// Uses direct AVL iteration - no full slice materialization
 func GetTopTrustedUsers(limit int) []address {
-	sortedUsers := GetSortedUsers()
-
-	if limit > len(sortedUsers) {
-		limit = len(sortedUsers)
-	}
-
-	result := make([]address, limit)
-	copy(result, sortedUsers[:limit])
-	return result
+	return GetTopUsers(limit, nil)
 }
 
 // GetScoreFreshness returns how many days since the user's last score update
